@@ -1,0 +1,12 @@
+ALTER TABLE "User" ADD COLUMN "notificationSettings" JSONB;
+ALTER TABLE "Lesson" ADD COLUMN "feedback" JSONB;
+ALTER TABLE "TeachingPlan" ADD COLUMN "term" TEXT;
+ALTER TABLE "TeachingPlan" ADD COLUMN "fileName" TEXT;
+ALTER TABLE "TeachingPlan" ADD COLUMN "objectKey" TEXT;
+ALTER TABLE "TeachingPlan" ADD COLUMN "fileSize" INTEGER;
+ALTER TABLE "TeachingPlan" ADD COLUMN "uploaderName" TEXT;
+ALTER TABLE "BusinessApplication" ADD COLUMN "amount" DECIMAL(65,30);
+ALTER TABLE "Recommendation" ADD COLUMN "hasContact" TEXT;
+ALTER TABLE "Recommendation" ADD COLUMN "trialSubjects" TEXT;
+ALTER TABLE "Recommendation" ADD COLUMN "trialTeachers" TEXT;
+ALTER TABLE "Recommendation" ADD COLUMN "month" TEXT;

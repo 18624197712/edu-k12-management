@@ -1,0 +1,327 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+enum Role {
+  ADMIN
+  HEAD_TEACHER
+  SUBJECT_TEACHER
+}
+enum StudentStatus {
+  ACTIVE
+  PAUSED
+  GRADUATED
+}
+enum WorkflowStatus {
+  DRAFT
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+enum TodoPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  name String
+  role Role @default(SUBJECT_TEACHER)
+  teacher Teacher?
+  auditLogs AuditLog[]
+  todoTasks TodoTask[]
+  notificationSettings Json?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Teacher {
+  id String @id @default(cuid())
+  name String
+  phone String?
+  subjects String[]
+  userId String? @unique
+  user User? @relation(fields: [userId], references: [id])
+  headStudents Student[] @relation("HeadTeacher")
+  courses Course[]
+  plans TeachingPlan[]
+  scores Score[]
+  reports LearningReport[]
+  meetings ParentMeeting[]
+  subjectAssignments StudentSubjectTeacher[]
+  createdAt DateTime @default(now())
+}
+model Student {
+  id String @id @default(cuid())
+  name String
+  grade String
+  school String
+  guardianPhone String?
+  subjects String[] @default([])
+  totalHours Decimal @default(0)
+  remainingHours Decimal @default(0)
+  status StudentStatus @default(ACTIVE)
+  headTeacherId String?
+  headTeacher Teacher? @relation("HeadTeacher", fields: [headTeacherId], references: [id])
+  archive StudentArchive?
+  lessons Lesson[]
+  plans TeachingPlan[]
+  scores Score[]
+  reports LearningReport[]
+  meetings ParentMeeting[]
+  renewals Renewal[]
+  applications BusinessApplication[]
+  recommendations Recommendation[]
+  subjectTeachers StudentSubjectTeacher[]
+  todoTasks TodoTask[]
+  scoreBatches ScoreBatch[]
+  hourLedgers HourLedger[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model StudentSubjectTeacher {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject String
+  teacherId String?
+  teacher Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  teacherName String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([studentId, subject])
+  @@index([teacherId])
+}
+model TodoTask {
+  id String @id @default(cuid())
+  ownerUserId String
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  studentId String?
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  title String
+  category String
+  priority TodoPriority @default(MEDIUM)
+  dueAt DateTime
+  completedAt DateTime?
+  relatedPath String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([ownerUserId, dueAt])
+  @@index([studentId])
+}
+model StudentArchive {
+  id String @id @default(cuid())
+  studentId String @unique
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  learningProfile Json?
+  familyNotes String?
+  communicationNotes Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Course {
+  id String @id @default(cuid())
+  name String
+  subject String
+  grade String
+  pricePerHour Decimal @default(0)
+  teacherId String?
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+  teacherName String?
+  lessons Lesson[]
+  createdAt DateTime @default(now())
+}
+model Lesson {
+  id String @id @default(cuid())
+  courseId String
+  course Course @relation(fields: [courseId], references: [id])
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  startsAt DateTime
+  durationMinutes Int @default(120)
+  status WorkflowStatus @default(PENDING)
+  consumedHours Decimal @default(0)
+  appliedHours Decimal @default(0)
+  feedback Json?
+  note String?
+  recurrenceGroupId String?
+  hourLedgers HourLedger[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([startsAt])
+  @@index([recurrenceGroupId, startsAt])
+}
+model ScoreBatch {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type String
+  name String
+  examDate DateTime
+  scores Score[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([studentId, name, examDate])
+  @@index([studentId, examDate])
+}
+model TeachingPlan {
+  id String @id @default(cuid())
+  title String
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  teacherId String
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  subject String
+  startsAt DateTime
+  endsAt DateTime
+  goals String
+  progress Int @default(0)
+  status WorkflowStatus @default(DRAFT)
+  term String?
+  fileName String?
+  objectKey String?
+  fileSize Int?
+  uploaderName String?
+  createdAt DateTime @default(now())
+}
+model Score {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  teacherId String?
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+  batchId String
+  batch ScoreBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  examName String
+  subject String
+  score Decimal
+  totalScore Decimal
+  examDate DateTime
+  note String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([studentId, batchId, subject])
+  @@index([studentId, examDate])
+}
+model LearningReport {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  teacherId String?
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+  title String
+  periodStart DateTime
+  periodEnd DateTime
+  content Json
+  status WorkflowStatus @default(DRAFT)
+  createdAt DateTime @default(now())
+}
+model ParentMeeting {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  teacherId String?
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+  meetingDate DateTime
+  feedback Json
+  parentSuggestion String?
+  recorder String
+  status WorkflowStatus @default(COMPLETED)
+  createdAt DateTime @default(now())
+}
+model Renewal {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  hours Decimal
+  appliedHours Decimal @default(0)
+  amount Decimal
+  status WorkflowStatus @default(PENDING)
+  followUpAt DateTime?
+  note String?
+  hourLedgers HourLedger[]
+  createdAt DateTime @default(now())
+}
+model HourLedger {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId String?
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  renewalId String?
+  renewal Renewal? @relation(fields: [renewalId], references: [id], onDelete: SetNull)
+  type String
+  amount Decimal
+  balanceAfter Decimal
+  note String?
+  operatorName String
+  createdAt DateTime @default(now())
+  @@index([studentId, createdAt])
+  @@index([lessonId])
+  @@index([renewalId])
+}
+model BusinessApplication {
+  id String @id @default(cuid())
+  code String @unique
+  studentId String
+  student Student @relation(fields: [studentId], references: [id])
+  type String
+  reason String
+  amount Decimal?
+  status WorkflowStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Recommendation {
+  id String @id @default(cuid())
+  studentName String
+  grade String
+  subject String
+  referrer String
+  status WorkflowStatus @default(PENDING)
+  trialAt DateTime?
+  hasContact String?
+  trialSubjects String?
+  trialTeachers String?
+  month String?
+  enrolledStudentId String?
+  student Student? @relation(fields: [enrolledStudentId], references: [id])
+  createdAt DateTime @default(now())
+}
+model TrainingModule {
+  id String @id @default(cuid())
+  name String
+  description String
+  color String @default("blue")
+  materials TrainingMaterial[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model TrainingMaterial {
+  id String @id @default(cuid())
+  moduleId String
+  module TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  name String
+  objectKey String
+  mimeType String
+  size Int
+  uploaderId String
+  createdAt DateTime @default(now())
+}
+model AuditLog {
+  id String @id @default(cuid())
+  userId String?
+  user User? @relation(fields: [userId], references: [id])
+  action String
+  entity String
+  entityId String?
+  payload Json?
+  ip String?
+  createdAt DateTime @default(now())
+}
