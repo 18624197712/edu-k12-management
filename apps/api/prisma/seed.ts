@@ -23,8 +23,8 @@ async function upsertUser(email: string, name: string, role: Role, passwordHash:
 }
 
 async function main() {
-  const initialPassword = process.env.ADMIN_PASSWORD || 'Edu@123456';
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@edu.local';
+  const initialPassword = process.env.ADMIN_PASSWORD || 'hy20250221';
+  const adminEmail = process.env.ADMIN_EMAIL || '1092855199@qq.com';
   const passwordHash = await argon2.hash(initialPassword);
   const adminUser = await upsertUser(adminEmail, '系统管理员', Role.ADMIN, passwordHash);
   const headUser = await upsertUser('head@edu.local', '李雯', Role.HEAD_TEACHER, passwordHash);
