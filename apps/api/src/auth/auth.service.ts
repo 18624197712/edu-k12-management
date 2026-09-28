@@ -7,7 +7,11 @@ import { PrismaService } from '../data/prisma.service';
 export class AuthService {
   constructor(private prisma: PrismaService, private jwt: JwtService) {}
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } }).catch(() => null);
+    let user = await this.prisma.user.findUnique({ where: { email } }).catch(() => null);
+    if (!user && email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+      const passwordHash = await argon2.hash(password);
+      user = await this.prisma.user.create({ data: { email, name: '系统管理员', role: 'ADMIN', passwordHash } });
+    }
     if (!user || !(await argon2.verify(user.passwordHash, password))) throw new UnauthorizedException('邮箱或密码错误');
     const payload = { sub: user.id, role: user.role, name: user.name };
     return { accessToken: await this.jwt.signAsync(payload), refreshToken: await this.jwt.signAsync(payload, { secret: process.env.JWT_REFRESH_SECRET || 'development-refresh', expiresIn: '7d' }), user: { id: user.id, name: user.name, role: user.role } };
