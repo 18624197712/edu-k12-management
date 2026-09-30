@@ -1,22 +1,384 @@
-import { DownloadOutlined, PrinterOutlined, UploadOutlined } from '@ant-design/icons';
-import { Button, Empty, Segmented, Space, Table, Tag, Upload, message } from 'antd';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { api } from '../../api';
-import { Heading, StudentWorkspace, downloadText, useStudents } from './shared';
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  PrinterOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Empty,
+  Popconfirm,
+  Segmented,
+  Space,
+  Table,
+  Tag,
+  Upload,
+  message,
+} from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { api } from "../../api";
+import { Heading, StudentWorkspace, downloadText, useStudents } from "./shared";
+
+const requestError = (error: any, fallback: string) =>
+  error?.response?.data?.error?.message || fallback;
 
 export function PlansPage() {
-  const students = useStudents(), [id, setId] = useState<string>(), [term, setTerm] = useState('秋季'), client = useQueryClient(), student = students.data?.find(item => item.id === (id || students.data?.[0]?.id));
-  const plans = useQuery({ queryKey: ['plans', student?.id], queryFn: async () => (await api.get('/plans', { params: { studentId: student?.id } })).data.data as any[], enabled: !!student });
-  const current = plans.data?.find(item => item.term === term);
-  const upload = async (file: File) => { if (!student) return false; if (file.size > 20 * 1024 * 1024) { message.error('文件不能超过20MB'); return false; } const signed = (await api.post('/files/upload-url', { name: file.name, type: file.type })).data.data; await fetch(signed.url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } }); await api.post('/plans', { title: `${student.name}_${term}教学计划`, studentId: student.id, subject: student.subjects[0] || '综合', term, fileName: file.name, objectKey: signed.key, fileSize: file.size, startsAt: '2026-09-01', endsAt: '2027-01-31', goals: '教学计划文件', status: 'COMPLETED' }); message.success('教学计划已上传'); client.invalidateQueries({ queryKey: ['plans', student.id] }); return false; };
-  const download = async () => { if (!current?.objectKey) return; const { url } = (await api.get('/files/download-url', { params: { key: current.objectKey } })).data.data; window.open(url, '_blank'); };
-  return <><Heading title="教学计划" desc="按学期制定学生一对一教学计划，支持上传、下载与打印" /><section className="panel no-pad">{student ? <StudentWorkspace students={students.data || []} value={student.id} onChange={setId}><div className="record-page"><div className="student-inline"><div className="detail-avatar">{student.name[0]}</div><div><h2>{student.name}</h2><p>{student.grade} · {student.subjects.join('、') || '暂未配置科目'} · {student.teachers.join('、') || '暂未分配教师'}</p></div></div><Segmented className="term-tabs" block value={term} onChange={value => setTerm(String(value))} options={['暑期', '寒假', '秋季', '春季'].map(value => ({ label: <span>{value}{plans.data?.some(item => item.term === value) && <i className="status-dot" />}</span>, value }))} /><section className="plan-card"><div className="panel-title"><strong>{term}教学计划文件 {term === '秋季' && <Tag color={current ? 'success' : 'warning'}>{current ? '当前学期' : '待上传'}</Tag>}</strong><Space><Upload showUploadList={false} beforeUpload={upload} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"><Button icon={<UploadOutlined />}>{current ? '重新上传' : '上传文件'}</Button></Upload>{current && <Button type="primary" icon={<DownloadOutlined />} onClick={download}>下载文件</Button>}</Space></div>{current ? <div className="plan-file"><span className="file-icon">{current.fileName?.split('.').pop()?.toUpperCase()}</span><div><b>{current.fileName}</b><span>文件大小：{Math.round(current.fileSize / 1024)} KB · 上传者：{current.uploaderName} · 已上传</span></div></div> : <Upload.Dragger showUploadList={false} beforeUpload={upload}><UploadOutlined /><p>点击或拖拽教学计划文件到此处</p><span>支持 PDF、Word、Excel、PPT，文件大小不超过 20MB</span></Upload.Dragger>}</section></div></StudentWorkspace> : <Empty description="暂无学生" />}</section></>;
+  const students = useStudents();
+  const [id, setId] = useState<string>();
+  const [term, setTerm] = useState("秋季");
+  const client = useQueryClient();
+  const student = students.data?.find(
+    (item) => item.id === (id || students.data?.[0]?.id),
+  );
+  const plans = useQuery({
+    queryKey: ["plans", student?.id],
+    queryFn: async () =>
+      (await api.get("/plans", { params: { studentId: student?.id } })).data
+        .data as any[],
+    enabled: !!student,
+  });
+  const current = plans.data?.find((item) => item.term === term);
+  const remove = useMutation({
+    mutationFn: (planId: string) => api.delete(`/plans/${planId}`),
+    onSuccess: () => {
+      message.success("教学计划已删除");
+      client.invalidateQueries({ queryKey: ["plans", student?.id] });
+    },
+    onError: (error) => message.error(requestError(error, "教学计划删除失败")),
+  });
+  const upload = async (file: File) => {
+    if (!student) return false;
+    if (file.size > 20 * 1024 * 1024) {
+      message.error("文件不能超过20MB");
+      return false;
+    }
+    const signed = (
+      await api.post("/files/upload-url", { name: file.name, type: file.type })
+    ).data.data;
+    await fetch(signed.url, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    });
+    if (current) await api.delete(`/plans/${current.id}`);
+    await api.post("/plans", {
+      title: `${student.name}_${term}教学计划`,
+      studentId: student.id,
+      subject: student.subjects[0] || "综合",
+      term,
+      fileName: file.name,
+      objectKey: signed.key,
+      fileSize: file.size,
+      startsAt: "2026-09-01",
+      endsAt: "2027-01-31",
+      goals: "教学计划文件",
+      status: "COMPLETED",
+    });
+    message.success(current ? "教学计划已替换" : "教学计划已上传");
+    client.invalidateQueries({ queryKey: ["plans", student.id] });
+    return false;
+  };
+  const download = async () => {
+    if (!current?.objectKey) return;
+    const { url } = (
+      await api.get("/files/download-url", {
+        params: { key: current.objectKey },
+      })
+    ).data.data;
+    window.open(url, "_blank");
+  };
+  return (
+    <>
+      <Heading
+        title="教学计划"
+        desc="按学期制定学生一对一教学计划，支持上传、下载与打印"
+      />
+      <section className="panel no-pad">
+        {student ? (
+          <StudentWorkspace
+            students={students.data || []}
+            value={student.id}
+            onChange={setId}
+          >
+            <div className="record-page">
+              <div className="student-inline">
+                <div className="detail-avatar">{student.name[0]}</div>
+                <div>
+                  <h2>{student.name}</h2>
+                  <p>
+                    {student.grade} ·{" "}
+                    {student.subjects.join("、") || "暂未配置科目"} ·{" "}
+                    {student.teachers.join("、") || "暂未分配教师"}
+                  </p>
+                </div>
+              </div>
+              <Segmented
+                className="term-tabs"
+                block
+                value={term}
+                onChange={(value) => setTerm(String(value))}
+                options={["暑期", "寒假", "秋季", "春季"].map((value) => ({
+                  label: (
+                    <span>
+                      {value}
+                      {plans.data?.some((item) => item.term === value) && (
+                        <i className="status-dot" />
+                      )}
+                    </span>
+                  ),
+                  value,
+                }))}
+              />
+              <section className="plan-card">
+                <div className="panel-title">
+                  <strong>
+                    {term}教学计划文件{" "}
+                    {term === "秋季" && (
+                      <Tag color={current ? "success" : "warning"}>
+                        {current ? "当前学期" : "待上传"}
+                      </Tag>
+                    )}
+                  </strong>
+                  <Space>
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={upload}
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                    >
+                      <Button icon={<UploadOutlined />}>
+                        {current ? "重新上传" : "上传文件"}
+                      </Button>
+                    </Upload>
+                    {current && (
+                      <>
+                        <Button
+                          type="primary"
+                          icon={<DownloadOutlined />}
+                          onClick={download}
+                        >
+                          下载文件
+                        </Button>
+                        <Popconfirm
+                          title="确认删除当前学期教学计划？"
+                          description="数据库记录和已上传文件将一并删除。"
+                          onConfirm={() => remove.mutate(current.id)}
+                        >
+                          <Button
+                            danger
+                            icon={<DeleteOutlined />}
+                            loading={remove.isPending}
+                          >
+                            删除
+                          </Button>
+                        </Popconfirm>
+                      </>
+                    )}
+                  </Space>
+                </div>
+                {current ? (
+                  <div className="plan-file">
+                    <span className="file-icon">
+                      {current.fileName?.split(".").pop()?.toUpperCase()}
+                    </span>
+                    <div>
+                      <b>{current.fileName}</b>
+                      <span>
+                        文件大小：{Math.round(current.fileSize / 1024)} KB ·
+                        上传者：{current.uploaderName} · 已上传
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <Upload.Dragger showUploadList={false} beforeUpload={upload}>
+                    <UploadOutlined />
+                    <p>点击或拖拽教学计划文件到此处</p>
+                    <span>支持 PDF、Word、Excel、PPT，文件大小不超过 20MB</span>
+                  </Upload.Dragger>
+                )}
+              </section>
+            </div>
+          </StudentWorkspace>
+        ) : (
+          <Empty description="暂无学生" />
+        )}
+      </section>
+    </>
+  );
 }
 
 export function LearningReportsPage() {
-  const students = useStudents(), [id, setId] = useState<string>(), [kind, setKind] = useState('月度学情报告'), client = useQueryClient(), student = students.data?.find(item => item.id === id);
-  const reports = useQuery({ queryKey: ['learning-reports', id], queryFn: async () => (await api.get('/learning-reports', { params: { studentId: id } })).data.data as any[], enabled: !!id }), report = reports.data?.find(item => item.title.includes(kind)) || reports.data?.[0];
-  const generate = useMutation({ mutationFn: () => api.post('/learning-reports/generate', { studentId: id, kind, title: `${student!.name}${kind}`, periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(), periodEnd: new Date().toISOString() }), onSuccess: () => { message.success('报告已生成'); client.invalidateQueries({ queryKey: ['learning-reports', id] }); } }), content = report?.content || {};
-  return <><Heading title="学情报告" desc="基于课程反馈与成绩数据生成月度或阶段性学习报告" /><section className="panel no-pad"><StudentWorkspace students={students.data || []} value={id} onChange={setId}>{student ? <div className="record-page"><div className="record-head"><div><h2>{student.name} · {student.grade} <span>{kind}</span></h2></div><Space><Button type="primary" onClick={() => generate.mutate()} loading={generate.isPending}>生成报告</Button><Button icon={<PrinterOutlined />} onClick={() => window.print()}>打印</Button><Button icon={<DownloadOutlined />} onClick={() => downloadText(`${student.name}${kind}.txt`, document.querySelector('.report-paper')?.textContent || '')}>导出文档</Button></Space></div><Segmented block value={kind} onChange={value => setKind(String(value))} options={['月度学情报告', '阶段性学习总结', '进步亮点推送']} />{report ? <article className="report-paper"><h2>{student.name}同学 {kind}</h2><p className="report-meta">{student.grade} · 报告生成时间：{new Date(report.createdAt).toLocaleDateString('zh-CN')}</p><h3>一、本月学习概况</h3><div className="report-metrics"><div><b>{content.lessonCount || 0}</b><span>已上课时</span></div><div><b>{content.subjects?.length || 0}</b><span>辅导科目数</span></div><div><b>{content.scores?.length || 0}</b><span>成绩记录数</span></div></div><h3>二、各科学习情况与问题分析</h3><p>{student.weakPoints || '暂未发现明显薄弱点'}</p><h3>三、成绩情况</h3>{content.scores?.length ? <Table size="small" pagination={false} rowKey="id" dataSource={content.scores} columns={[{ title: '科目', dataIndex: 'subject' }, { title: '考试', dataIndex: 'examName' }, { title: '成绩', dataIndex: 'score' }]} /> : <p>暂无成绩数据，请在学生成绩模块中填写后生成报告。</p>}<h3>四、下月学习建议</h3><p>{content.suggestions}</p><div className="signature-row"><span>班主任签字：_______________</span><span>家长签字：_______________</span></div></article> : <Empty description="点击生成报告，从课程与成绩数据生成学情分析" />}</div> : <div className="select-empty"><Empty description="请从左侧选择学生" /></div>}</StudentWorkspace></section></>;
+  const students = useStudents();
+  const [id, setId] = useState<string>();
+  const [kind, setKind] = useState("月度学情报告");
+  const client = useQueryClient();
+  const student = students.data?.find((item) => item.id === id);
+  const reports = useQuery({
+    queryKey: ["learning-reports", id],
+    queryFn: async () =>
+      (await api.get("/learning-reports", { params: { studentId: id } })).data
+        .data as any[],
+    enabled: !!id,
+  });
+  const report =
+    reports.data?.find((item) => item.title.includes(kind)) ||
+    reports.data?.[0];
+  const content = report?.content || {};
+  const generate = useMutation({
+    mutationFn: () =>
+      api.post("/learning-reports/generate", {
+        studentId: id,
+        kind,
+        title: `${student!.name}${kind}`,
+        periodStart: new Date(
+          new Date().getFullYear(),
+          new Date().getMonth(),
+          1,
+        ).toISOString(),
+        periodEnd: new Date().toISOString(),
+      }),
+    onSuccess: () => {
+      message.success("报告已生成");
+      client.invalidateQueries({ queryKey: ["learning-reports", id] });
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (reportId: string) =>
+      api.delete(`/learning-reports/${reportId}`),
+    onSuccess: () => {
+      message.success("学情报告已删除");
+      client.invalidateQueries({ queryKey: ["learning-reports", id] });
+    },
+    onError: (error) => message.error(requestError(error, "学情报告删除失败")),
+  });
+  return (
+    <>
+      <Heading
+        title="学情报告"
+        desc="基于课程反馈与成绩数据生成月度或阶段性学习报告"
+      />
+      <section className="panel no-pad">
+        <StudentWorkspace
+          students={students.data || []}
+          value={id}
+          onChange={setId}
+        >
+          {student ? (
+            <div className="record-page">
+              <div className="record-head">
+                <div>
+                  <h2>
+                    {student.name} · {student.grade} <span>{kind}</span>
+                  </h2>
+                </div>
+                <Space>
+                  <Button
+                    type="primary"
+                    onClick={() => generate.mutate()}
+                    loading={generate.isPending}
+                  >
+                    生成报告
+                  </Button>
+                  <Button
+                    icon={<PrinterOutlined />}
+                    onClick={() => window.print()}
+                  >
+                    打印
+                  </Button>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={() =>
+                      downloadText(
+                        `${student.name}${kind}.txt`,
+                        document.querySelector(".report-paper")?.textContent ||
+                          "",
+                      )
+                    }
+                  >
+                    导出文档
+                  </Button>
+                  {report && (
+                    <Popconfirm
+                      title="确认删除当前学情报告？"
+                      onConfirm={() => remove.mutate(report.id)}
+                    >
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        loading={remove.isPending}
+                      >
+                        删除报告
+                      </Button>
+                    </Popconfirm>
+                  )}
+                </Space>
+              </div>
+              <Segmented
+                block
+                value={kind}
+                onChange={(value) => setKind(String(value))}
+                options={["月度学情报告", "阶段性学习总结", "进步亮点推送"]}
+              />
+              {report ? (
+                <article className="report-paper">
+                  <h2>
+                    {student.name}同学 {kind}
+                  </h2>
+                  <p className="report-meta">
+                    {student.grade} · 报告生成时间：
+                    {new Date(report.createdAt).toLocaleDateString("zh-CN")}
+                  </p>
+                  <h3>一、本月学习概况</h3>
+                  <div className="report-metrics">
+                    <div>
+                      <b>{content.lessonCount || 0}</b>
+                      <span>已上课时</span>
+                    </div>
+                    <div>
+                      <b>{content.subjects?.length || 0}</b>
+                      <span>辅导科目数</span>
+                    </div>
+                    <div>
+                      <b>{content.scores?.length || 0}</b>
+                      <span>成绩记录数</span>
+                    </div>
+                  </div>
+                  <h3>二、各科学习情况与问题分析</h3>
+                  <p>{student.weakPoints || "暂未发现明显薄弱点"}</p>
+                  <h3>三、成绩情况</h3>
+                  {content.scores?.length ? (
+                    <Table
+                      size="small"
+                      pagination={false}
+                      rowKey="id"
+                      dataSource={content.scores}
+                      columns={[
+                        { title: "科目", dataIndex: "subject" },
+                        { title: "考试", dataIndex: "examName" },
+                        { title: "成绩", dataIndex: "score" },
+                      ]}
+                    />
+                  ) : (
+                    <p>暂无成绩数据，请在学生成绩模块中填写后生成报告。</p>
+                  )}
+                  <h3>四、下月学习建议</h3>
+                  <p>{content.suggestions}</p>
+                  <div className="signature-row">
+                    <span>班主任签字：_______________</span>
+                    <span>家长签字：_______________</span>
+                  </div>
+                </article>
+              ) : (
+                <Empty description="点击生成报告，从课程与成绩数据生成学情分析" />
+              )}
+            </div>
+          ) : (
+            <div className="select-empty">
+              <Empty description="请从左侧选择学生" />
+            </div>
+          )}
+        </StudentWorkspace>
+      </section>
+    </>
+  );
 }

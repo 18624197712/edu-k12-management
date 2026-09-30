@@ -41,6 +41,59 @@
 @media(max-width:767px){.content{padding:16px}.score-toolbar,.subject-form-head,.score-summary-head{align-items:stretch;flex-direction:column}.score-toolbar .ant-select{width:100%!important}.course-summary{grid-template-columns:1fr}.ant-table-wrapper{overflow-x:auto}.workbench-primary>.panel{min-height:0}}
 .warning-avatar.ant-avatar{width:36px;height:36px;min-width:36px;line-height:36px;font-size:13px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;overflow:hidden}
 .warning-row{grid-template-columns:36px minmax(0,1fr) 115px;min-height:54px}
+.student-actions{white-space:nowrap}
+.student-actions .ant-btn{padding-inline:7px;white-space:nowrap}
+.student-delete-button{min-width:48px}
+.student-list-panel .ant-table-sticky-scroll{z-index:5;background:#fff;border-radius:4px}
+.student-list-panel .ant-table-sticky-scroll-bar{height:8px!important}
 .warning-row>div:nth-child(2){min-width:0}.warning-row>div:nth-child(2) b,.warning-row>div:nth-child(2) span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .teacher-person{display:flex;align-items:center;gap:10px}.teacher-person b,.teacher-person span{display:block}.teacher-person span,.teacher-counts,.muted-text{font-size:12px;color:var(--muted);margin-top:3px}.teacher-avatar.ant-avatar{background:#eaf1fb;color:var(--primary);font-weight:650;flex:0 0 auto}
 .subject-assignment-list{margin:-2px 0 14px;padding:14px 16px 2px;border:1px solid var(--border);border-radius:6px;background:#f7f9fc}.subject-assignment-list .subject-form-head span{font-size:12px;color:var(--muted)}
+
+/* Enrollment quotes and shared-hour planning */
+.enrollment-mode-panel{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px;padding:14px 18px}
+.enrollment-mode-panel>div:first-child strong,.enrollment-mode-panel>div:first-child span{display:block}
+.enrollment-mode-panel>div:first-child span{color:var(--muted);font-size:12px;margin-top:4px}
+.enrollment-mode-panel .ant-segmented{min-width:260px}
+.enrollment-workspace{display:grid;grid-template-columns:minmax(520px,1.15fr) minmax(380px,.85fr);gap:14px;align-items:start;margin-bottom:14px}
+.enrollment-form-panel,.enrollment-result-panel{min-width:0}
+.enrollment-result-panel{position:sticky;top:72px}
+.quote-section-title{font-size:13px;font-weight:650;color:#344054;border-top:1px solid #eef1f5;padding-top:15px;margin:2px 0 12px}
+.enrollment-form-panel .activity-row{margin-bottom:10px}
+.quote-actions{margin-top:4px}
+.selected-student-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 14px;background:#f7f9fc;border:1px solid var(--border);border-radius:6px;margin-bottom:14px}
+.selected-student-summary b,.selected-student-summary span{display:block}.selected-student-summary span{color:var(--muted);font-size:12px;margin-top:4px}
+.selected-student-summary>strong{color:var(--primary);font-size:22px;white-space:nowrap}.selected-student-summary small{font-size:11px;font-weight:400}
+.discount-comparison{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;padding:16px;background:#f7f9fc;border:1px solid var(--border);border-radius:6px;margin-bottom:10px}.discount-comparison>div:not(.discount-saving){text-align:center}.discount-comparison span,.discount-comparison del,.discount-comparison b{display:block}.discount-comparison span{color:var(--muted);font-size:12px}.discount-comparison del{font-size:18px;color:#667085;margin-top:5px}.discount-comparison b{font-size:22px;color:var(--primary);margin-top:5px}.discount-comparison>i{text-align:center;font-style:normal;color:#98a2b3;font-size:18px}.discount-saving{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;margin:14px -16px -16px;padding:10px 16px;background:#edf4fd;border-radius:0 0 6px 6px;color:var(--primary)}.discount-saving strong{font-size:18px}.discount-saving small{font-size:12px}
+.price-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.price-summary.compact{grid-template-columns:repeat(2,1fr)}
+.price-summary>div{text-align:center;padding:14px 8px;background:#f7f9fc;border-radius:6px}
+.price-summary span,.price-summary b{display:block}.price-summary span{color:var(--muted);font-size:12px}.price-summary b{font-size:18px;color:var(--primary);margin-top:6px}
+.balance-flow{display:grid;grid-template-columns:1fr 22px 1fr 22px 1fr;align-items:stretch;margin:14px 0}
+.balance-flow>div{text-align:center;border:1px solid var(--border);padding:16px 8px;background:#fff}.balance-flow>div:first-child{border-radius:6px 0 0 6px}.balance-flow>div:last-child{border-radius:0 6px 6px 0}
+.balance-flow i{display:grid;place-items:center;font-style:normal;color:#98a2b3;background:#f7f9fc;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.balance-flow span,.balance-flow b,.balance-flow small{display:block}.balance-flow span{color:var(--muted);font-size:11px}.balance-flow b{font-size:22px;margin:5px 0}.balance-flow small{font-size:11px;color:var(--muted)}
+.balance-flow .highlight{background:#edf4fd;border-color:#bdd0e9}.balance-flow .highlight b{color:var(--primary)}
+.projection-list{border-top:1px solid #eef1f5;margin:4px 0 14px}
+.projection-list>div{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:11px 2px;border-bottom:1px solid #eef1f5}
+.projection-list span{font-size:12px;color:var(--muted)}.projection-list b{font-size:13px;text-align:right}
+.projection-list .emphasis b{color:var(--primary)}
+.enrollment-records{margin-top:14px}.table-secondary{color:var(--muted);font-size:11px;margin-top:3px}
+.confirm-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.confirm-summary>div{padding:14px;text-align:center;background:#f7f9fc;border-radius:6px}.confirm-summary span,.confirm-summary b{display:block}.confirm-summary span{font-size:12px;color:var(--muted)}.confirm-summary b{font-size:19px;color:var(--primary);margin-top:5px}
+.confirm-inline-hours{margin:-4px 0 16px;padding:9px 12px;background:#edf4fd;border-radius:6px;color:var(--primary);font-size:12px;text-align:center}
+.confirm-warning{margin-bottom:16px}
+@media(max-width:1180px){.enrollment-workspace{grid-template-columns:1fr}.enrollment-result-panel{position:static}}
+@media(max-width:767px){.enrollment-mode-panel{align-items:stretch;flex-direction:column}.enrollment-mode-panel .ant-segmented{min-width:0;width:100%}.price-summary,.price-summary.compact,.confirm-summary{grid-template-columns:1fr}.balance-flow{grid-template-columns:1fr}.balance-flow i{border:0;height:24px}.balance-flow>div:first-child,.balance-flow>div:last-child{border-radius:6px}.discount-saving{align-items:flex-start;flex-direction:column;gap:3px}.enrollment-records .toolbar>*{width:100%!important}}
+
+/* The page owns vertical scrolling; the table owns only its horizontal track. */
+.content{overflow:visible;overflow-x:clip;overflow-y:visible}
+.student-list-panel .ant-table-sticky-scroll{position:sticky;bottom:12px;z-index:5;box-shadow:0 -1px 4px rgba(23,32,51,.08);pointer-events:auto}
+
+/* Shared black-cat brand mark used on the login screen and sidebar. */
+.brand-mark{background:#eaf1fb;padding:2px;overflow:hidden}
+.brand-mark svg,.login-cat-badge svg{display:block}
+.login-cat-badge{width:88px;height:88px;display:grid;place-items:center;flex:0 0 auto;background:#eaf1fb;border:1px solid #dce8f7;border-radius:18px}
+
+/* Legacy direct-label rules must not reshape Ant Design's internal labels. */
+.form-row .ant-form-item-label>label{display:inline-flex;flex-direction:row;align-items:center;gap:0;color:#344054}

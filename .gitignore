@@ -1,5 +1,7 @@
 node_modules
 dist
+!apps/web/dist/
+!apps/web/dist/**
 .env
 .env.production
 .env.server
@@ -11,3 +13,12 @@ playwright-report
 test-results
 *.log
 *.tsbuildinfo
+
+# Local deployment staging artifacts
+deploy-staging-v2/
+upload-parts/
+upload-parts-v2/
+upload-parts-v3/
+edu-deploy-upload.zip
+edu-release-v2.zip
+edu-release-v3.tar

@@ -13,6 +13,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
@@ -26,6 +27,8 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../api";
 import { Heading, useStudents } from "./shared";
+
+export { RenewalPage } from "./EnrollmentPage";
 
 const days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -98,8 +101,8 @@ export function CoursesPage() {
                     {row.student.name} · {row.course.subject}
                   </b>
                   <span>
-                    {row.course.teacherName || row.course.teacher?.name || "-"} · 本月共上{" "}
-                    {Number(row.consumedHours) * 3} 小时
+                    {row.course.teacherName || row.course.teacher?.name || "-"}{" "}
+                    · 本月共上 {Number(row.consumedHours) * 3} 小时
                   </span>
                   <Tag
                     color={
@@ -191,7 +194,10 @@ export function CoursesPage() {
                 <Button
                   size="small"
                   onClick={() =>
-                    update.mutate({ id: row.id, values: { status: 'CANCELLED' } })
+                    update.mutate({
+                      id: row.id,
+                      values: { status: "CANCELLED" },
+                    })
                   }
                 >
                   拒绝
@@ -293,7 +299,7 @@ export function CoursesPage() {
   );
 }
 
-export function RenewalPage() {
+function LegacyRenewalPage() {
   const students = useStudents(),
     client = useQueryClient(),
     [params] = useSearchParams(),
@@ -672,14 +678,14 @@ export function BusinessPage() {
             {
               title: "操作",
               render: (_: unknown, row: any) => (
-                <Button
-                  danger
-                  type="link"
-                  icon={<DeleteOutlined />}
-                  onClick={() => remove.mutate(row.id)}
+                <Popconfirm
+                  title="确认删除这条业务办理记录？"
+                  onConfirm={() => remove.mutate(row.id)}
                 >
-                  删除
-                </Button>
+                  <Button danger type="link" icon={<DeleteOutlined />}>
+                    删除
+                  </Button>
+                </Popconfirm>
               ),
             },
           ]}

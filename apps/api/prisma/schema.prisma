@@ -22,6 +22,10 @@ enum WorkflowStatus {
   COMPLETED
   CANCELLED
 }
+enum EnrollmentType {
+  FIRST_ENROLLMENT
+  RENEWAL
+}
 enum TodoPriority {
   LOW
   MEDIUM
@@ -36,6 +40,7 @@ model User {
   teacher Teacher?
   auditLogs AuditLog[]
   todoTasks TodoTask[]
+  enrollmentQuotes Renewal[]
   notificationSettings Json?
   avatarUrl String?
   createdAt DateTime @default(now())
@@ -237,16 +242,40 @@ model ParentMeeting {
 }
 model Renewal {
   id String @id @default(cuid())
-  studentId String
-  student Student @relation(fields: [studentId], references: [id])
+  type EnrollmentType @default(RENEWAL)
+  studentId String?
+  student Student? @relation(fields: [studentId], references: [id])
+  prospectName String?
+  prospectPhone String?
+  unitPrice Decimal @default(0)
+  normalHours Decimal @default(0)
+  halfHours Decimal @default(0)
+  giftHours Decimal @default(0)
+  giftType String?
+  activities Json?
   hours Decimal
   appliedHours Decimal @default(0)
   amount Decimal
+  balanceBefore Decimal @default(0)
+  balanceAfter Decimal @default(0)
+  weeklyFrequency Int @default(2)
+  sessionHours Decimal @default(2)
+  projectionStart DateTime @default(now())
+  currentEstimatedEndAt DateTime?
+  estimatedEndAt DateTime?
   status WorkflowStatus @default(PENDING)
   followUpAt DateTime?
+  confirmedAt DateTime?
+  createdById String?
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName String?
   note String?
   hourLedgers HourLedger[]
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([studentId, createdAt])
+  @@index([createdById, status])
+  @@index([type, status])
 }
 model HourLedger {
   id String @id @default(cuid())
@@ -264,7 +293,7 @@ model HourLedger {
   createdAt DateTime @default(now())
   @@index([studentId, createdAt])
   @@index([lessonId])
-  @@index([renewalId])
+  @@unique([renewalId])
 }
 model BusinessApplication {
   id String @id @default(cuid())

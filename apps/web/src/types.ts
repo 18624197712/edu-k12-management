@@ -11,7 +11,7 @@ export type PageMeta = { page: number; pageSize: number; total: number };
 export type ApiResponse<T> = { data: T; meta?: PageMeta };
 export type HourLedger = {
   id: string;
-  type: 'LESSON_CONSUME' | 'LESSON_REFUND' | 'RENEWAL_ADD';
+  type: 'LESSON_CONSUME' | 'LESSON_REFUND' | 'FIRST_ENROLLMENT_ADD' | 'RENEWAL_ADD';
   amount: number;
   balanceAfter: number;
   note?: string;

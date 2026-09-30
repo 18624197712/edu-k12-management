@@ -1,21 +1,451 @@
-import { EditOutlined, PrinterOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, Descriptions, Empty, Form, Input, InputNumber, Modal, Progress, Select, Space, Table, Tag, Typography, message } from 'antd';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { gradeOptions, subjectOptions, subjectsForGrade } from '@edu/shared';
-import { useState } from 'react';
-import { api } from '../api';
-import { ScoreSummary } from '../components/ScoreWorkspace';
-import { Heading, StudentWorkspace, useStudents } from './domains/shared';
-import type { HourLedger } from '../types';
+import {
+  EditOutlined,
+  PrinterOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Descriptions,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { gradeOptions, subjectOptions, subjectsForGrade } from "@edu/shared";
+import { useState } from "react";
+import { api } from "../api";
+import { ScoreSummary } from "../components/ScoreWorkspace";
+import { Heading, StudentWorkspace, useStudents } from "./domains/shared";
+import type { HourLedger } from "../types";
 
 export function ArchivesPage() {
-  const students = useStudents(), [id, setId] = useState<string>(), [editing, setEditing] = useState(false), [form] = Form.useForm(), client = useQueryClient();
-  const student = students.data?.find(item => item.id === (id || students.data?.[0]?.id));
-  const ledgers = useQuery({ queryKey: ['hour-ledgers', student?.id], queryFn: async () => (await api.get(`/students/${student!.id}/hour-ledgers`)).data.data as HourLedger[], enabled: !!student?.id });
-  const selectedSubjects = Form.useWatch('subjects', form) || [];
-  const save = useMutation({ mutationFn: async (values: any) => api.patch(`/students/${student!.id}`, { name: values.name, grade: values.grade, school: values.school, phone: values.phone, status: values.status, subjects: values.subjects || [], subjectTeachers: (values.subjects || []).map((subject: string) => ({ subject, teacherName: values.teacherBySubject?.[subject]?.trim() || null })), profile: { guardianName: values.guardianName, gender: values.gender, address: values.address, schedule: values.schedule, weakPoints: values.weakPoints, headTeacherName: values.headTeacherName }, familyNotes: values.familyNotes }), onSuccess: () => { message.success('学生完整档案已保存'); setEditing(false); client.invalidateQueries({ queryKey: ['students'] }); client.invalidateQueries({ queryKey: ['student', student!.id] }); } });
-  const openEdit = () => { if (!student) return; form.setFieldsValue({ ...student, headTeacherName: student.headTeacher === '-' ? '' : student.headTeacher, teacherBySubject: Object.fromEntries(student.subjectTeachers.map(item => [item.subject, item.teacherName])) }); setEditing(true); };
-  return <><Heading title="学生档案" desc="统一维护学生、家庭、报读、科目教师和成绩信息" /><section className="panel no-pad">{student ? <StudentWorkspace students={students.data || []} value={student.id} onChange={setId}><div className="record-page"><div className="archive-hero"><div className="detail-avatar">{student.name[0]}</div><div><h2>{student.name}</h2><Space wrap><Tag>{student.gender}</Tag><Tag>{student.grade}</Tag><Tag color={student.status === 'ACTIVE' ? 'success' : 'default'}>{student.status === 'ACTIVE' ? '在读' : student.status === 'PAUSED' ? '停课' : '已结业'}</Tag>{student.subjects.map(subject => <Tag color="blue" key={subject}>{subject}</Tag>)}</Space><p>{student.school} · 授课老师：{student.teachers.join(' / ') || '暂未分配'}</p></div></div><div className="record-actions"><Button icon={<PrinterOutlined />} onClick={() => window.print()}>打印档案</Button><Button type="primary" icon={<EditOutlined />} onClick={openEdit}>编辑完整档案</Button></div><div className="archive-sections"><section><h3>基本信息</h3><Descriptions column={2} items={[{ key: 'name', label: '学生姓名', children: student.name }, { key: 'gender', label: '性别', children: student.gender }, { key: 'grade', label: '年级', children: student.grade }, { key: 'school', label: '就读学校', children: student.school }, { key: 'subjects', label: '辅导学科', children: student.subjects.join('、') || '暂未配置' }, { key: 'teachers', label: '授课老师', children: student.subjectTeachers.map(item => `${item.subject}：${item.teacherName || '未分配'}`).join('、') || '暂未分配' }]} /></section><section><h3>家庭信息</h3><Descriptions column={2} items={[{ key: 'guardian', label: '家长姓名', children: student.guardianName }, { key: 'phone', label: '联系电话', children: student.phone }, { key: 'address', label: '家庭住址', children: student.address }, { key: 'schedule', label: '上课时间', children: student.schedule }]} /></section><section><h3>报读信息 · 全科共享课时</h3><div className="hour-summary"><div><strong>{student.totalHours}</strong><span>报读总课时</span></div><div><strong>{student.totalHours - student.remainingHours}</strong><span>已消耗课时</span></div><div><strong>{student.remainingHours}</strong><span>剩余课时</span></div></div><Progress percent={Math.round((student.totalHours - student.remainingHours) / Math.max(student.totalHours, 1) * 100)} /><Typography.Text type="secondary">所有辅导科目共享此课时余额；任一科目课程结束后扣减，续费确认后统一增加。</Typography.Text></section><section><h3>课时流水</h3><Table size="small" rowKey="id" loading={ledgers.isLoading} dataSource={ledgers.data || []} pagination={{ pageSize: 8 }} locale={{ emptyText: '暂无课时变动' }} columns={[{ title: '时间', dataIndex: 'createdAt', width: 170, render: (value: string) => new Date(value).toLocaleString('zh-CN') }, { title: '类型', dataIndex: 'type', width: 110, render: (value: HourLedger['type']) => value === 'RENEWAL_ADD' ? '续费增加' : value === 'LESSON_REFUND' ? '课时退回' : '上课扣减' }, { title: '变动', dataIndex: 'amount', width: 90, render: (value: number) => <b className={Number(value) < 0 ? 'danger' : ''}>{Number(value) > 0 ? '+' : ''}{Number(value)}</b> }, { title: '余额', dataIndex: 'balanceAfter', width: 90, render: (value: number) => Number(value) }, { title: '说明', dataIndex: 'note' }, { title: '操作人', dataIndex: 'operatorName', width: 100 }]} /></section><section><h3>成绩信息</h3><ScoreSummary student={student} editable /></section><section><h3>家长与学生的期望与需求</h3><div className="detail-grid"><div className="info-block"><b>家长期望</b><p>{student.familyNotes || '暂未填写'}</p></div><div className="info-block"><b>学生需求</b><p>{student.weakPoints || '暂未填写'}</p></div></div></section></div></div></StudentWorkspace> : <Empty description="暂无学生档案" />}</section>
-    <Modal width={760} title="编辑学生完整档案" open={editing} onCancel={() => setEditing(false)} onOk={() => form.submit()} confirmLoading={save.isPending}><Form form={form} layout="vertical" onFinish={values => save.mutate(values)}><div className="form-row"><Form.Item name="name" label="学生姓名" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="gender" label="性别"><Select options={['男', '女', '其他'].map(value => ({ value, label: value }))} /></Form.Item></div><div className="form-row"><Form.Item name="grade" label="年级" rules={[{ required: true }]}><Select showSearch options={gradeOptions.map(value => ({ value, label: value }))} /></Form.Item><Form.Item name="school" label="就读学校"><Input /></Form.Item></div><div className="form-row"><Form.Item name="guardianName" label="家长姓名"><Input /></Form.Item><Form.Item name="phone" label="联系电话"><Input /></Form.Item></div><div className="form-row"><Form.Item name="address" label="家庭住址"><Input /></Form.Item><Form.Item name="schedule" label="上课时间"><Input /></Form.Item></div><div className="form-row"><Form.Item name="status" label="学生状态"><Select options={[{ value: 'ACTIVE', label: '在读' }, { value: 'PAUSED', label: '停课' }, { value: 'GRADUATED', label: '已结业' }]} /></Form.Item><Form.Item name="headTeacherName" label="班主任"><Input allowClear placeholder="由业务人员填写姓名" /></Form.Item></div><div className="subject-form-head"><b>辅导科目与授课教师</b><Button size="small" icon={<ReloadOutlined />} onClick={() => form.setFieldValue('subjects', subjectsForGrade(form.getFieldValue('grade') || student?.grade || ''))}>按年级添加推荐科目</Button></div><Form.Item name="subjects" rules={[{ type: 'array' }]}><Select mode="tags" tokenSeparators={['、', ',']} options={subjectOptions.map(value => ({ value, label: value }))} placeholder="可选择或输入自定义科目；允许全部清空" /></Form.Item>{selectedSubjects.map((subject: string) => <Form.Item key={subject} name={['teacherBySubject', subject]} label={`${subject}授课教师`}><Input allowClear placeholder="由业务人员填写教师姓名" /></Form.Item>)}<div className="form-row"><Form.Item name="totalHours" label="报读总课时"><InputNumber disabled style={{ width: '100%' }} /></Form.Item><Form.Item name="remainingHours" label="剩余课时"><InputNumber disabled style={{ width: '100%' }} /></Form.Item></div><Typography.Paragraph type="secondary">课时由课程完成和续费入账自动变更，不能在档案中直接修改。</Typography.Paragraph><Form.Item name="weakPoints" label="学生需求"><Input.TextArea rows={3} /></Form.Item><Form.Item name="familyNotes" label="家长期望"><Input.TextArea rows={3} /></Form.Item></Form></Modal>
-  </>;
+  const students = useStudents(),
+    [id, setId] = useState<string>(),
+    [editing, setEditing] = useState(false),
+    [form] = Form.useForm(),
+    client = useQueryClient();
+  const student = students.data?.find(
+    (item) => item.id === (id || students.data?.[0]?.id),
+  );
+  const ledgers = useQuery({
+    queryKey: ["hour-ledgers", student?.id],
+    queryFn: async () =>
+      (await api.get(`/students/${student!.id}/hour-ledgers`)).data
+        .data as HourLedger[],
+    enabled: !!student?.id,
+  });
+  const selectedSubjects = Form.useWatch("subjects", form) || [];
+  const save = useMutation({
+    mutationFn: async (values: any) =>
+      api.patch(`/students/${student!.id}`, {
+        name: values.name,
+        grade: values.grade,
+        school: values.school,
+        phone: values.phone,
+        status: values.status,
+        subjects: values.subjects || [],
+        subjectTeachers: (values.subjects || []).map((subject: string) => ({
+          subject,
+          teacherName: values.teacherBySubject?.[subject]?.trim() || null,
+        })),
+        profile: {
+          guardianName: values.guardianName,
+          gender: values.gender,
+          address: values.address,
+          schedule: values.schedule,
+          weakPoints: values.weakPoints,
+          headTeacherName: values.headTeacherName,
+        },
+        familyNotes: values.familyNotes,
+      }),
+    onSuccess: () => {
+      message.success("学生完整档案已保存");
+      setEditing(false);
+      client.invalidateQueries({ queryKey: ["students"] });
+      client.invalidateQueries({ queryKey: ["student", student!.id] });
+    },
+  });
+  const openEdit = () => {
+    if (!student) return;
+    form.setFieldsValue({
+      ...student,
+      headTeacherName: student.headTeacher === "-" ? "" : student.headTeacher,
+      teacherBySubject: Object.fromEntries(
+        student.subjectTeachers.map((item) => [item.subject, item.teacherName]),
+      ),
+    });
+    setEditing(true);
+  };
+  return (
+    <>
+      <Heading
+        title="学生档案"
+        desc="统一维护学生、家庭、报读、科目教师和成绩信息"
+      />
+      <section className="panel no-pad">
+        {student ? (
+          <StudentWorkspace
+            students={students.data || []}
+            value={student.id}
+            onChange={setId}
+          >
+            <div className="record-page">
+              <div className="archive-hero">
+                <div className="detail-avatar">{student.name[0]}</div>
+                <div>
+                  <h2>{student.name}</h2>
+                  <Space wrap>
+                    <Tag>{student.gender}</Tag>
+                    <Tag>{student.grade}</Tag>
+                    <Tag
+                      color={
+                        student.status === "ACTIVE" ? "success" : "default"
+                      }
+                    >
+                      {student.status === "ACTIVE"
+                        ? "在读"
+                        : student.status === "PAUSED"
+                          ? "停课"
+                          : "已结业"}
+                    </Tag>
+                    {student.subjects.map((subject) => (
+                      <Tag color="blue" key={subject}>
+                        {subject}
+                      </Tag>
+                    ))}
+                  </Space>
+                  <p>
+                    {student.school} · 授课老师：
+                    {student.teachers.join(" / ") || "暂未分配"}
+                  </p>
+                </div>
+              </div>
+              <div className="record-actions">
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => window.print()}
+                >
+                  打印档案
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={openEdit}
+                >
+                  编辑完整档案
+                </Button>
+              </div>
+              <div className="archive-sections">
+                <section>
+                  <h3>基本信息</h3>
+                  <Descriptions
+                    column={2}
+                    items={[
+                      {
+                        key: "name",
+                        label: "学生姓名",
+                        children: student.name,
+                      },
+                      {
+                        key: "gender",
+                        label: "性别",
+                        children: student.gender,
+                      },
+                      { key: "grade", label: "年级", children: student.grade },
+                      {
+                        key: "school",
+                        label: "就读学校",
+                        children: student.school,
+                      },
+                      {
+                        key: "subjects",
+                        label: "辅导学科",
+                        children: student.subjects.join("、") || "暂未配置",
+                      },
+                      {
+                        key: "teachers",
+                        label: "授课老师",
+                        children:
+                          student.subjectTeachers
+                            .map(
+                              (item) =>
+                                `${item.subject}：${item.teacherName || "未分配"}`,
+                            )
+                            .join("、") || "暂未分配",
+                      },
+                    ]}
+                  />
+                </section>
+                <section>
+                  <h3>家庭信息</h3>
+                  <Descriptions
+                    column={2}
+                    items={[
+                      {
+                        key: "guardian",
+                        label: "家长姓名",
+                        children: student.guardianName,
+                      },
+                      {
+                        key: "phone",
+                        label: "联系电话",
+                        children: student.phone,
+                      },
+                      {
+                        key: "address",
+                        label: "家庭住址",
+                        children: student.address,
+                      },
+                      {
+                        key: "schedule",
+                        label: "上课时间",
+                        children: student.schedule,
+                      },
+                    ]}
+                  />
+                </section>
+                <section>
+                  <h3>报读信息 · 全科共享课时</h3>
+                  <div className="hour-summary">
+                    <div>
+                      <strong>{student.totalHours}</strong>
+                      <span>报读总课时</span>
+                    </div>
+                    <div>
+                      <strong>
+                        {student.totalHours - student.remainingHours}
+                      </strong>
+                      <span>已消耗课时</span>
+                    </div>
+                    <div>
+                      <strong>{student.remainingHours}</strong>
+                      <span>剩余课时</span>
+                    </div>
+                  </div>
+                  <Progress
+                    percent={Math.round(
+                      ((student.totalHours - student.remainingHours) /
+                        Math.max(student.totalHours, 1)) *
+                        100,
+                    )}
+                  />
+                  <Typography.Text type="secondary">
+                    所有辅导科目共享此课时余额；任一科目课程结束后扣减，首次报读或续费确认后统一增加。
+                  </Typography.Text>
+                </section>
+                <section>
+                  <h3>课时流水</h3>
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    loading={ledgers.isLoading}
+                    dataSource={ledgers.data || []}
+                    pagination={{ pageSize: 8 }}
+                    locale={{ emptyText: "暂无课时变动" }}
+                    columns={[
+                      {
+                        title: "时间",
+                        dataIndex: "createdAt",
+                        width: 170,
+                        render: (value: string) =>
+                          new Date(value).toLocaleString("zh-CN"),
+                      },
+                      {
+                        title: "类型",
+                        dataIndex: "type",
+                        width: 110,
+                        render: (value: HourLedger["type"]) =>
+                          value === "FIRST_ENROLLMENT_ADD"
+                            ? "首次报读"
+                            : value === "RENEWAL_ADD"
+                              ? "续费增加"
+                              : value === "LESSON_REFUND"
+                                ? "课时退回"
+                                : "上课扣减",
+                      },
+                      {
+                        title: "变动",
+                        dataIndex: "amount",
+                        width: 90,
+                        render: (value: number) => (
+                          <b className={Number(value) < 0 ? "danger" : ""}>
+                            {Number(value) > 0 ? "+" : ""}
+                            {Number(value)}
+                          </b>
+                        ),
+                      },
+                      {
+                        title: "余额",
+                        dataIndex: "balanceAfter",
+                        width: 90,
+                        render: (value: number) => Number(value),
+                      },
+                      { title: "说明", dataIndex: "note" },
+                      {
+                        title: "操作人",
+                        dataIndex: "operatorName",
+                        width: 100,
+                      },
+                    ]}
+                  />
+                </section>
+                <section>
+                  <h3>成绩信息</h3>
+                  <ScoreSummary student={student} editable />
+                </section>
+                <section>
+                  <h3>家长与学生的期望与需求</h3>
+                  <div className="detail-grid">
+                    <div className="info-block">
+                      <b>家长期望</b>
+                      <p>{student.familyNotes || "暂未填写"}</p>
+                    </div>
+                    <div className="info-block">
+                      <b>学生需求</b>
+                      <p>{student.weakPoints || "暂未填写"}</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </StudentWorkspace>
+        ) : (
+          <Empty description="暂无学生档案" />
+        )}
+      </section>
+      <Modal
+        width={760}
+        title="编辑学生完整档案"
+        open={editing}
+        onCancel={() => setEditing(false)}
+        onOk={() => form.submit()}
+        confirmLoading={save.isPending}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={(values) => save.mutate(values)}
+        >
+          <div className="form-row">
+            <Form.Item
+              name="name"
+              label="学生姓名"
+              rules={[{ required: true }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item name="gender" label="性别">
+              <Select
+                options={["男", "女", "其他"].map((value) => ({
+                  value,
+                  label: value,
+                }))}
+              />
+            </Form.Item>
+          </div>
+          <div className="form-row">
+            <Form.Item name="grade" label="年级" rules={[{ required: true }]}>
+              <Select
+                showSearch
+                options={gradeOptions.map((value) => ({ value, label: value }))}
+              />
+            </Form.Item>
+            <Form.Item name="school" label="就读学校">
+              <Input />
+            </Form.Item>
+          </div>
+          <div className="form-row">
+            <Form.Item name="guardianName" label="家长姓名">
+              <Input />
+            </Form.Item>
+            <Form.Item name="phone" label="联系电话">
+              <Input />
+            </Form.Item>
+          </div>
+          <div className="form-row">
+            <Form.Item name="address" label="家庭住址">
+              <Input />
+            </Form.Item>
+            <Form.Item name="schedule" label="上课时间">
+              <Input />
+            </Form.Item>
+          </div>
+          <div className="form-row">
+            <Form.Item name="status" label="学生状态">
+              <Select
+                options={[
+                  { value: "ACTIVE", label: "在读" },
+                  { value: "PAUSED", label: "停课" },
+                  { value: "GRADUATED", label: "已结业" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="headTeacherName" label="班主任">
+              <Input allowClear placeholder="由业务人员填写姓名" />
+            </Form.Item>
+          </div>
+          <div className="subject-form-head">
+            <b>辅导科目与授课教师</b>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() =>
+                form.setFieldValue(
+                  "subjects",
+                  subjectsForGrade(
+                    form.getFieldValue("grade") || student?.grade || "",
+                  ),
+                )
+              }
+            >
+              按年级添加推荐科目
+            </Button>
+          </div>
+          <Form.Item name="subjects" rules={[{ type: "array" }]}>
+            <Select
+              mode="tags"
+              tokenSeparators={["、", ","]}
+              options={subjectOptions.map((value) => ({ value, label: value }))}
+              placeholder="可选择或输入自定义科目；允许全部清空"
+            />
+          </Form.Item>
+          {selectedSubjects.map((subject: string) => (
+            <Form.Item
+              key={subject}
+              name={["teacherBySubject", subject]}
+              label={`${subject}授课教师`}
+            >
+              <Input allowClear placeholder="由业务人员填写教师姓名" />
+            </Form.Item>
+          ))}
+          <div className="form-row">
+            <Form.Item name="totalHours" label="报读总课时">
+              <InputNumber disabled style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item name="remainingHours" label="剩余课时">
+              <InputNumber disabled style={{ width: "100%" }} />
+            </Form.Item>
+          </div>
+          <Typography.Paragraph type="secondary">
+            课时由课程完成和报名续费入账自动变更，不能在档案中直接修改。
+          </Typography.Paragraph>
+          <Form.Item name="weakPoints" label="学生需求">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="familyNotes" label="家长期望">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  );
 }

@@ -1,10 +1,11 @@
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   Button,
   Empty,
   Form,
   Input,
   Modal,
+  Popconfirm,
   Progress,
   Table,
   Tabs,
@@ -70,6 +71,30 @@ export function StudentDetail() {
       visitForm.resetFields();
       client.invalidateQueries({ queryKey: ["student", id] });
     },
+  });
+  const removeVisit = useMutation({
+    mutationFn: async (index: number) => {
+      if (!student) throw new Error("学生尚未加载");
+      return api.patch(`/students/${student.id}/archive`, {
+        learningProfile: {
+          guardianName: student.guardianName,
+          gender: student.gender,
+          address: student.address,
+          schedule: student.schedule,
+          teachers: student.teachers,
+          weakPoints: student.weakPoints,
+        },
+        familyNotes: student.familyNotes,
+        communicationNotes: student.communicationNotes.filter(
+          (_, itemIndex) => itemIndex !== index,
+        ),
+      });
+    },
+    onSuccess: () => {
+      message.success("回访记录已删除");
+      client.invalidateQueries({ queryKey: ["student", id] });
+    },
+    onError: () => message.error("回访记录删除失败"),
   });
   if (studentQuery.isLoading)
     return <div className="panel">正在加载学生档案...</div>;
@@ -168,7 +193,7 @@ export function StudentDetail() {
         locale={{ emptyText: "暂无课时变动" }}
         columns={[
           { title: "时间", dataIndex: "createdAt", render: (value: string) => new Date(value).toLocaleString("zh-CN") },
-          { title: "类型", dataIndex: "type", render: (value: HourLedger["type"]) => value === "RENEWAL_ADD" ? "续费增加" : value === "LESSON_REFUND" ? "课时退回" : "上课扣减" },
+          { title: "类型", dataIndex: "type", render: (value: HourLedger["type"]) => value === "FIRST_ENROLLMENT_ADD" ? "首次报读" : value === "RENEWAL_ADD" ? "续费增加" : value === "LESSON_REFUND" ? "课时退回" : "上课扣减" },
           { title: "变动", dataIndex: "amount", render: (value: number) => `${Number(value) > 0 ? "+" : ""}${Number(value)}` },
           { title: "余额", dataIndex: "balanceAfter", render: (value: number) => Number(value) },
           { title: "说明", dataIndex: "note" },
@@ -179,7 +204,7 @@ export function StudentDetail() {
         style={{ marginTop: 16 }}
         onClick={() => navigate(`/renewals?studentId=${student.id}`)}
       >
-        发起续课
+        报名续费
       </Button>
     </>
   );
@@ -196,6 +221,17 @@ export function StudentDetail() {
             </b>
             <h4>{item.title}</h4>
             <p>{item.content}</p>
+            <Popconfirm
+              title="确认删除这条回访记录？"
+              description="删除后无法恢复。"
+              okText="确认删除"
+              cancelText="取消"
+              onConfirm={() => removeVisit.mutate(index)}
+            >
+              <Button danger type="link" size="small" icon={<DeleteOutlined />}>
+                删除记录
+              </Button>
+            </Popconfirm>
           </div>
         ))
       ) : (

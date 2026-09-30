@@ -34,7 +34,7 @@ export function Dashboard() {
     ['今日上课课时', s.lessonsToday ?? 0, '节', '今天已安排课程', <ClockCircleOutlined />], ['在读学生数', s.students ?? 0, '人', '当前负责学生', <TeamOutlined />],
     ['今日家校沟通', s.familyContactsToday ?? 0, '次', '来自家长会与回访记录', <MessageOutlined />], ['待处理事项', s.pendingTodos ?? pending.length, '项', '按优先级及时处理', <CheckSquareOutlined />],
     ['本月累计课时', s.lessonsThisMonth ?? 0, '节', '来自课程消耗记录', <CalendarOutlined />], ['本月新增学生', s.newStudentsThisMonth ?? 0, '人', '当前负责范围', <UserAddOutlined />],
-    ['待填写反馈', s.pendingFeedback ?? 0, '项', '已结束但尚未反馈', <FileTextOutlined />], ['待跟进续费', s.pendingRenewals ?? 0, '项', '剩余课时与续费记录', <TeamOutlined />],
+    ['待填写反馈', s.pendingFeedback ?? 0, '项', '已结束但尚未反馈', <FileTextOutlined />], ['待确认报价', s.pendingRenewals ?? 0, '项', '首次报读与续费报价', <TeamOutlined />],
   ] as const;
   const processTask = (task: any) => { const path = task.relatedPath || '/dashboard'; navigate(`${path}${task.studentId ? `${path.includes('?') ? '&' : '?'}studentId=${task.studentId}` : ''}`); };
   return <div><div className="page-heading"><div><Typography.Title level={3}>工作台</Typography.Title><Typography.Text type="secondary">早上好，{user?.name || '老师'}！今天有 {s.lessonsToday ?? 0} 节课，{s.pendingTodos ?? pending.length} 项待办需要处理。</Typography.Text></div><Button type="primary" icon={<PlusOutlined />} onClick={() => setTodoOpen(true)}>新增待办</Button></div>
