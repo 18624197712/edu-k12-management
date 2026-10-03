@@ -1,6 +1,7 @@
 import {
   DeleteOutlined,
   DownloadOutlined,
+  EditOutlined,
   PlusOutlined,
   SearchOutlined,
   UploadOutlined,
@@ -256,14 +257,19 @@ export function Students() {
     {
       title: "操作",
       fixed: "right" as const,
-      width: 220,
+      width: 250,
       render: (_: unknown, row: Student) => (
         <Space size={0} className="student-actions" wrap={false}>
           <Button type="link" onClick={() => navigate(`/students/${row.id}`)}>
             详情
           </Button>
-          <Button type="link" onClick={() => navigate(`/archives?studentId=${row.id}&edit=1`)}>
-            编辑
+          <Button
+            type="primary"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => navigate(`/archives?studentId=${row.id}&edit=1`)}
+          >
+            编辑资料
           </Button>
           <Button
             type="link"
