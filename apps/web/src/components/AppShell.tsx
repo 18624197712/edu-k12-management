@@ -1,5 +1,5 @@
 import { BellOutlined, BookOutlined, CalendarOutlined, DashboardOutlined, FileTextOutlined, FundOutlined, QuestionCircleOutlined, ReadOutlined, SolutionOutlined, TeamOutlined, UserOutlined, WalletOutlined } from '@ant-design/icons';
-import { Avatar, Badge, Button, Input, Layout, Menu, Popover, Space } from 'antd';
+import { Avatar, Button, Input, Layout, Menu, Popover, Space } from 'antd';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { CatLogo } from './CatLogo';
@@ -8,7 +8,7 @@ import { useUiStore } from '../store';
 const items = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '工作台首页' },
   { type: 'group' as const, label: '学生管理', children: [
-    { key: '/students', icon: <TeamOutlined />, label: <span className="menu-with-badge">学生管理<Badge count={5}/></span> },
+    { key: '/students', icon: <TeamOutlined />, label: '学生管理' },
     { key: '/archives', icon: <SolutionOutlined />, label: '学生档案' }, { key: '/plans', icon: <CalendarOutlined />, label: '教学计划' },
     { key: '/scores', icon: <FundOutlined />, label: '学生成绩' }, { key: '/learning-reports', icon: <FileTextOutlined />, label: '学情报告' },
     { key: '/parent-meetings', icon: <TeamOutlined />, label: '家长会记录' },
@@ -25,5 +25,5 @@ const pageTitles:Record<string,string>={dashboard:'工作台首页',todos:'待�
 
 export function AppShell(){
   const location=useLocation(),navigate=useNavigate(),{collapsed,setCollapsed}=useUiStore(),{user,logout}=useAuth(),page=location.pathname.split('/')[1]||'dashboard';
-  return <Layout className="app-layout"><Layout.Sider width={218} collapsedWidth={72} collapsed={collapsed} breakpoint="lg" onBreakpoint={setCollapsed} theme="light" className="sidebar"><div className="brand"><div className="brand-mark"><CatLogo size={30} /></div>{!collapsed&&<div><strong>小黑助理</strong><span>专属于你的私人教培助理</span></div>}</div><Menu mode="inline" selectedKeys={[`/${page}`]} items={items} onClick={({key})=>navigate(key)}/><Popover placement="rightBottom" trigger="click" content={<Button type="text" danger onClick={async()=>{await logout();navigate('/login')}}>退出登录</Button>}><button className="sidebar-user"><Avatar>李</Avatar>{!collapsed&&<div><b>{user?.name||'李老师'}</b><span>{user?.role==='ADMIN'?'系统管理员':'资深班主任'}</span></div>}</button></Popover></Layout.Sider><Layout><Layout.Header className="topbar"><div className="breadcrumb"><span>小黑助理</span><i>/</i><b>{pageTitles[page]||'工作台首页'}</b></div><Space size={18}><Input.Search className="global-search" placeholder="搜索学生、课程..." onSearch={value=>value&&navigate(`/students?search=${encodeURIComponent(value)}`)}/><Badge dot><BellOutlined className="header-icon"/></Badge><QuestionCircleOutlined className="header-icon"/></Space></Layout.Header><Layout.Content className="content"><Outlet/></Layout.Content></Layout></Layout>;
+  return <Layout className="app-layout"><Layout.Sider width={218} collapsedWidth={72} collapsed={collapsed} breakpoint="lg" onBreakpoint={setCollapsed} theme="light" className="sidebar"><div className="brand"><div className="brand-mark"><CatLogo size={30} /></div>{!collapsed&&<div><strong>小黑助理</strong><span>专属于你的私人教培助理</span></div>}</div><Menu mode="inline" selectedKeys={[`/${page}`]} items={items} onClick={({key})=>navigate(key)}/><Popover placement="rightBottom" trigger="click" content={<Button type="text" danger onClick={async()=>{await logout();navigate('/login')}}>退出登录</Button>}><button className="sidebar-user"><Avatar>李</Avatar>{!collapsed&&<div><b>{user?.name||'李老师'}</b><span>{user?.role==='ADMIN'?'系统管理员':'资深班主任'}</span></div>}</button></Popover></Layout.Sider><Layout><Layout.Header className="topbar"><div className="breadcrumb"><span>小黑助理</span><i>/</i><b>{pageTitles[page]||'工作台首页'}</b></div><Space size={18}><Input.Search className="global-search" placeholder="搜索学生、课程..." onSearch={value=>value&&navigate(`/students?search=${encodeURIComponent(value)}`)}/><BellOutlined className="header-icon"/><QuestionCircleOutlined className="header-icon"/></Space></Layout.Header><Layout.Content className="content"><Outlet/></Layout.Content></Layout></Layout>;
 }

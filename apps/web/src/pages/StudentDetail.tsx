@@ -1,4 +1,8 @@
-import { ArrowLeftOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  ArrowLeftOutlined,
+  DeleteOutlined,
+  EditOutlined,
+} from "@ant-design/icons";
 import {
   Button,
   Empty,
@@ -42,7 +46,8 @@ export function StudentDetail() {
   const ledgersQuery = useQuery({
     queryKey: ["hour-ledgers", id],
     queryFn: async () =>
-      (await api.get<ApiResponse<HourLedger[]>>(`/students/${id}/hour-ledgers`)).data.data,
+      (await api.get<ApiResponse<HourLedger[]>>(`/students/${id}/hour-ledgers`))
+        .data.data,
     enabled: !!id,
   });
   const student = studentQuery.data;
@@ -102,17 +107,27 @@ export function StudentDetail() {
   const overview = (
     <>
       <div className="detail-grid">
-        <div className="info-block score-overview-block"><b>各科最新成绩</b><ScoreSummary student={student} /><p>薄弱知识点：{student.weakPoints || "暂无"}</p></div>
+        <div className="info-block score-overview-block">
+          <b>各科最新成绩</b>
+          <ScoreSummary student={student} />
+          <p>薄弱知识点：{student.weakPoints || "暂无"}</p>
+        </div>
         <div className="info-block">
           <b>课时进度</b>
           <Progress
             percent={Math.round(
-              ((student.totalHours - student.remainingHours) /
+              ((student.consumedHours ??
+                student.totalHours - student.remainingHours) /
                 Math.max(student.totalHours, 1)) *
                 100,
             )}
           />
-          <p>已消耗 {student.totalHours - student.remainingHours} 课时</p>
+          <p>
+            已消耗{" "}
+            {student.consumedHours ??
+              student.totalHours - student.remainingHours}{" "}
+            课时
+          </p>
         </div>
       </div>
       <section className="panel inner-panel">
@@ -150,7 +165,8 @@ export function StudentDetail() {
         { title: "科目", render: (_: unknown, row: any) => row.course.subject },
         {
           title: "教师",
-          render: (_: unknown, row: any) => row.course.teacherName || row.course.teacher?.name || "-",
+          render: (_: unknown, row: any) =>
+            row.course.teacherName || row.course.teacher?.name || "-",
         },
         {
           title: "消耗",
@@ -172,13 +188,28 @@ export function StudentDetail() {
   const hours = (
     <>
       <div className="hour-summary">
-        <div><strong>{student.totalHours}</strong><span>报读总课时</span></div>
-        <div><strong>{student.totalHours - student.remainingHours}</strong><span>已消耗课时</span></div>
-        <div><strong>{student.remainingHours}</strong><span>剩余课时</span></div>
+        <div>
+          <strong>{student.totalHours}</strong>
+          <span>报读总课时</span>
+        </div>
+        <div>
+          <strong>
+            {student.consumedHours ??
+              student.totalHours - student.remainingHours}
+          </strong>
+          <span>已消耗课时</span>
+        </div>
+        <div>
+          <strong>{student.remainingHours}</strong>
+          <span>剩余课时</span>
+        </div>
       </div>
       <Progress
         percent={Math.round(
-          ((student.totalHours - student.remainingHours) / Math.max(student.totalHours, 1)) * 100,
+          ((student.consumedHours ??
+            student.totalHours - student.remainingHours) /
+            Math.max(student.totalHours, 1)) *
+            100,
         )}
       />
       <Typography.Paragraph type="secondary">
@@ -192,10 +223,36 @@ export function StudentDetail() {
         pagination={{ pageSize: 8 }}
         locale={{ emptyText: "暂无课时变动" }}
         columns={[
-          { title: "时间", dataIndex: "createdAt", render: (value: string) => new Date(value).toLocaleString("zh-CN") },
-          { title: "类型", dataIndex: "type", render: (value: HourLedger["type"]) => value === "FIRST_ENROLLMENT_ADD" ? "首次报读" : value === "RENEWAL_ADD" ? "续费增加" : value === "LESSON_REFUND" ? "课时退回" : "上课扣减" },
-          { title: "变动", dataIndex: "amount", render: (value: number) => `${Number(value) > 0 ? "+" : ""}${Number(value)}` },
-          { title: "余额", dataIndex: "balanceAfter", render: (value: number) => Number(value) },
+          {
+            title: "时间",
+            dataIndex: "createdAt",
+            render: (value: string) => new Date(value).toLocaleString("zh-CN"),
+          },
+          {
+            title: "类型",
+            dataIndex: "type",
+            render: (value: HourLedger["type"]) =>
+              value === "FIRST_ENROLLMENT_ADD"
+                ? "首次报读"
+                : value === "RENEWAL_ADD"
+                  ? "续费增加"
+                  : value === "LESSON_REFUND"
+                    ? "课时退回"
+                    : value === "MANUAL_ADJUSTMENT"
+                      ? "人工调整"
+                      : "上课扣减",
+          },
+          {
+            title: "变动",
+            dataIndex: "amount",
+            render: (value: number) =>
+              `${Number(value) > 0 ? "+" : ""}${Number(value)}`,
+          },
+          {
+            title: "余额",
+            dataIndex: "balanceAfter",
+            render: (value: number) => Number(value),
+          },
           { title: "说明", dataIndex: "note" },
         ]}
       />
@@ -251,6 +308,14 @@ export function StudentDetail() {
       >
         返回学生列表
       </Button>
+      <Button
+        type="primary"
+        icon={<EditOutlined />}
+        onClick={() => navigate(`/archives?studentId=${student.id}&edit=1`)}
+        style={{ marginLeft: 8 }}
+      >
+        编辑资料
+      </Button>
       <section className="student-profile-card">
         <div className="detail-avatar">{student.name[0]}</div>
         <div className="profile-copy">
@@ -265,8 +330,11 @@ export function StudentDetail() {
             <Tag color="success">在读</Tag>
           </div>
           <p>
-            授课老师：{student.teachers.join(" / ")}　上课时间：
-            {student.schedule}
+            授课老师：{student.teachers.join(" / ")}　固定时间：
+            {student.subjectTeachers
+              .filter((item) => item.schedule)
+              .map((item) => `${item.subject} ${item.schedule}`)
+              .join("；") || "未设置"}
           </p>
           <p>
             家长：{student.guardianName}　联系电话：{student.phone}

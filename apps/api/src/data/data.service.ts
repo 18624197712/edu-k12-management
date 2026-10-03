@@ -192,6 +192,7 @@ export class DataService {
       school: row.school,
       subjects: row.subjects,
       remainingHours: number(row.remainingHours),
+      consumedHours: round2(number(row.totalHours) - number(row.remainingHours)),
       status: row.status,
       phone: row.guardianPhone,
       guardianName: profile.guardianName || "-",
@@ -209,6 +210,7 @@ export class DataService {
       subjectTeachers: assignments.map((item: any) => ({
         subject: item.subject,
         teacherName: item.teacherName || item.teacher?.name || "",
+        schedule: item.schedule || "",
       })),
       weakPoints: profile.weakPoints || "",
       completedLessons: row._count?.lessons || 0,
@@ -362,10 +364,10 @@ export class DataService {
     const subjects = Array.from(
       new Set<string>((data.subjects || []).filter(Boolean)),
     );
-    const teacherBySubject = new Map<string, string>(
+    const assignmentBySubject = new Map<string, JsonMap>(
       (data.subjectTeachers || []).map((item: JsonMap) => [
         item.subject,
-        String(item.teacherName || "").trim(),
+        item,
       ]),
     );
     const totalHours = number(
@@ -390,7 +392,8 @@ export class DataService {
         subjectTeachers: {
           create: subjects.map((subject: string) => ({
             subject,
-            teacherName: teacherBySubject.get(subject) || null,
+            teacherName: String(assignmentBySubject.get(subject)?.teacherName || "").trim() || null,
+            schedule: String(assignmentBySubject.get(subject)?.schedule || "").trim() || null,
           })),
         },
       },
@@ -424,20 +427,46 @@ export class DataService {
         }
       : undefined;
     if (profile) delete profile.totalHours;
+    const hasHourEdit = data.totalHours !== undefined || data.remainingHours !== undefined || data.consumedHours !== undefined;
+    const totalHours = data.totalHours !== undefined ? nonNegative(data.totalHours, "报读总课时") : current.totalHours;
+    const consumedHours = data.consumedHours !== undefined
+      ? nonNegative(data.consumedHours, "消耗课时")
+      : data.remainingHours !== undefined
+        ? round2(totalHours - nonNegative(data.remainingHours, "剩余课时"))
+        : current.consumedHours;
+    const remainingHours = data.remainingHours !== undefined
+      ? nonNegative(data.remainingHours, "剩余课时")
+      : round2(totalHours - consumedHours);
+    if (totalHours < 0 || consumedHours < 0 || remainingHours < 0)
+      throw new BadRequestException("课时必须为非负数");
+    if (!Number.isFinite(totalHours) || !Number.isFinite(consumedHours) || !Number.isFinite(remainingHours))
+      throw new BadRequestException("课时数值无效");
+    if (round2(consumedHours + remainingHours) !== round2(totalHours))
+      throw new BadRequestException("报读总课时必须等于已消耗课时与剩余课时之和");
     await this.prisma.$transaction(async (tx) => {
+      const before = await tx.student.findUniqueOrThrow({
+        where: { id },
+        select: { totalHours: true, remainingHours: true },
+      });
+      const studentData: Prisma.StudentUpdateInput = {};
+      if (data.name !== undefined) studentData.name = data.name;
+      if (data.grade !== undefined) studentData.grade = data.grade;
+      if (data.school !== undefined) studentData.school = data.school;
+      if (data.phone !== undefined) studentData.guardianPhone = data.phone;
+      if (data.status !== undefined) studentData.status = data.status;
+      if (hasHourEdit) {
+        studentData.totalHours = totalHours;
+        studentData.remainingHours = remainingHours;
+      }
       await tx.student.update({
         where: { id },
-        data: {
-          name: data.name,
-          grade: data.grade,
-          school: data.school,
-          guardianPhone: data.phone,
-          subjects,
-          status: data.status,
-          headTeacherId: data.headTeacherId,
-        },
+        data: { ...studentData, ...(data.subjects !== undefined ? { subjects } : {}) },
       });
-      if (profile || data.familyNotes !== undefined)
+      if (profile || data.familyNotes !== undefined) {
+        const archiveUpdate: Prisma.StudentArchiveUpdateInput = {};
+        if (profile) archiveUpdate.learningProfile = profile;
+        if (data.familyNotes !== undefined)
+          archiveUpdate.familyNotes = data.familyNotes;
         await tx.studentArchive.upsert({
           where: { studentId: id },
           create: {
@@ -445,13 +474,14 @@ export class DataService {
             learningProfile: profile || {},
             familyNotes: data.familyNotes || "",
           },
-          update: { learningProfile: profile, familyNotes: data.familyNotes },
+          update: archiveUpdate,
         });
+      }
       if (data.subjects !== undefined || data.subjectTeachers !== undefined) {
-        const teacherBySubject = new Map<string, string>(
+        const assignmentBySubject = new Map<string, JsonMap>(
           (data.subjectTeachers || []).map((item: JsonMap) => [
             item.subject,
-            String(item.teacherName || "").trim(),
+            item,
           ]),
         );
         await tx.studentSubjectTeacher.deleteMany({ where: { studentId: id } });
@@ -460,9 +490,26 @@ export class DataService {
             data: subjects.map((subject: string) => ({
               studentId: id,
               subject,
-              teacherName: teacherBySubject.get(subject) || null,
+              teacherName: String(assignmentBySubject.get(subject)?.teacherName || "").trim() || null,
+              schedule: String(assignmentBySubject.get(subject)?.schedule || "").trim() || null,
             })),
           });
+      }
+      if (
+        hasHourEdit &&
+        (round2(remainingHours - number(before.remainingHours)) !== 0 ||
+          round2(totalHours - number(before.totalHours)) !== 0)
+      ) {
+        await tx.hourLedger.create({
+          data: {
+            studentId: id,
+            type: "MANUAL_ADJUSTMENT",
+            amount: round2(remainingHours - number(before.remainingHours)),
+            balanceAfter: remainingHours,
+            note: `人工调整课时：报读 ${totalHours}，消耗 ${consumedHours}，剩余 ${remainingHours}`,
+            operatorName: user.name,
+          },
+        });
       }
     });
     await this.audit(user, "UPDATE", "Student", id, data);
@@ -849,6 +896,17 @@ export class DataService {
             where: { id: data.studentId },
             data: { remainingHours: { decrement: debit } },
           });
+        if (data.syncSchedule && data.subject) {
+          const weekday = ["日", "一", "二", "三", "四", "五", "六"][startsAt.getDay()];
+          const endAt = new Date(startsAt.getTime() + durationMinutes * 60000);
+          const pad = (value: number) => String(value).padStart(2, "0");
+          await tx.studentSubjectTeacher.updateMany({
+            where: { studentId: data.studentId, subject: String(data.subject) },
+            data: {
+              schedule: `周${weekday} ${pad(startsAt.getHours())}:${pad(startsAt.getMinutes())}-${pad(endAt.getHours())}:${pad(endAt.getMinutes())}`,
+            },
+          });
+        }
         const created = [];
         let balance = number(account.remainingHours);
         for (const date of dates) {
@@ -1738,50 +1796,114 @@ export class DataService {
     await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
     const sheet = workbook.worksheets[0];
     if (!sheet) throw new BadRequestException("Excel 中没有工作表");
-    const errors: string[] = [],
-      rows: Array<{
-        name: string;
-        grade: string;
-        school: string;
-        guardianPhone: string;
-      }> = [];
+    const errors: string[] = [], rows: JsonMap[] = [];
+    const split = (value: unknown) => String(value || "").split(/[;,；]/).map((item) => item.trim()).filter(Boolean);
     sheet.eachRow((row, n) => {
       if (n === 1) return;
-      const name = String(row.getCell(1).value || "").trim(),
-        grade = String(row.getCell(2).value || "").trim();
+      const textCell = (index: number) => {
+          const value = row.getCell(index).value;
+          const text = value === undefined || value === null ? "" : String(value).trim();
+          return text || undefined;
+        },
+        numberCell = (index: number) => {
+          const value = row.getCell(index).value;
+          return value === undefined || value === null || value === "" ? undefined : value;
+        },
+        name = textCell(1),
+        gender = textCell(2),
+        grade = textCell(3);
       if (!name || !grade) {
         errors.push(`第 ${n} 行：姓名和年级为必填项`);
         return;
       }
       rows.push({
         name,
+        gender,
         grade,
-        school: String(row.getCell(3).value || ""),
-        guardianPhone: String(row.getCell(4).value || ""),
+        school: textCell(4),
+        status: textCell(5),
+        guardianName: textCell(6),
+        phone: textCell(7),
+        address: textCell(8),
+        subjects: textCell(9) ? split(row.getCell(9).value) : undefined,
+        teacherNames: textCell(10) ? split(row.getCell(10).value) : undefined,
+        schedules: textCell(11) ? split(row.getCell(11).value) : undefined,
+        totalHours: numberCell(12),
+        consumedHours: numberCell(13),
+        remainingHours: numberCell(14),
+        weakPoints: textCell(15),
+        familyNotes: textCell(16),
       });
     });
-    const names = new Set<string>();
+    const keys = new Set<string>();
     rows.forEach((row, index) => {
-      if (names.has(row.name)) errors.push(`第 ${index + 2} 行：学生姓名重复`);
-      names.add(row.name);
+      const key = row.phone ? `phone:${row.phone}` : `name:${row.name}:${row.grade}`;
+      if (keys.has(key)) errors.push(`第 ${index + 2} 行：重复的联系电话或姓名+年级`);
+      keys.add(key);
+      if (row.status && !['ACTIVE', 'PAUSED', 'GRADUATED'].includes(row.status)) errors.push(`第 ${index + 2} 行：学生状态无效`);
+      for (const [label, value] of [['报读总课时', row.totalHours], ['已消耗课时', row.consumedHours], ['剩余课时', row.remainingHours]] as const) {
+        if (value !== undefined && value !== null && value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0)) errors.push(`第 ${index + 2} 行：${label}必须为非负数字`);
+      }
+      if (row.totalHours !== undefined && row.remainingHours !== undefined && Number(row.remainingHours) > Number(row.totalHours)) errors.push(`第 ${index + 2} 行：剩余课时不能大于报读总课时`);
+      if (row.totalHours !== undefined && row.consumedHours !== undefined && Number(row.consumedHours) > Number(row.totalHours)) errors.push(`第 ${index + 2} 行：已消耗课时不能大于报读总课时`);
+      if (row.totalHours !== undefined && row.consumedHours !== undefined && row.remainingHours !== undefined && round2(Number(row.consumedHours) + Number(row.remainingHours)) !== round2(Number(row.totalHours))) errors.push(`第 ${index + 2} 行：报读总课时必须等于已消耗课时与剩余课时之和`);
     });
     if (errors.length) return { imported: 0, errors };
-    await this.prisma.$transaction(
-      rows.map((row) =>
-        this.prisma.student.create({
-          data: { ...row, status: StudentStatus.ACTIVE },
-        }),
-      ),
-    );
+    let created = 0, updated = 0;
+    await this.prisma.$transaction(async (tx) => {
+      for (const row of rows) {
+        const inputTotal = row.totalHours === undefined || row.totalHours === '' ? undefined : number(row.totalHours);
+        const inputConsumed = row.consumedHours === undefined || row.consumedHours === '' ? undefined : number(row.consumedHours);
+        const inputRemaining = row.remainingHours === undefined || row.remainingHours === '' ? undefined : number(row.remainingHours);
+        const where = row.phone ? { guardianPhone: row.phone } : { name: row.name, grade: row.grade };
+        const existing = await tx.student.findFirst({ where, include: { archive: true, subjectTeachers: true } });
+        const existingConsumed = existing ? round2(number(existing.totalHours) - number(existing.remainingHours)) : 0;
+        const totalHours = inputTotal ?? (existing ? number(existing.totalHours) : round2((inputConsumed || 0) + (inputRemaining || 0)));
+        const consumedHours = inputConsumed ?? (inputRemaining !== undefined ? round2(totalHours - inputRemaining) : existingConsumed);
+        const remainingHours = inputRemaining ?? round2(totalHours - consumedHours);
+        if (totalHours < 0 || consumedHours < 0 || remainingHours < 0 || round2(consumedHours + remainingHours) !== round2(totalHours))
+          throw new BadRequestException(`第 ${rows.indexOf(row) + 2} 行：课时合计不一致`);
+        if (existing) {
+          const profile = (existing.archive?.learningProfile || {}) as JsonMap;
+          const learningProfile = {
+            ...profile,
+            ...(row.gender !== undefined ? { gender: row.gender } : {}),
+            ...(row.guardianName !== undefined ? { guardianName: row.guardianName } : {}),
+            ...(row.address !== undefined ? { address: row.address } : {}),
+            ...(row.weakPoints !== undefined ? { weakPoints: row.weakPoints } : {}),
+          };
+          await tx.student.update({ where: { id: existing.id }, data: {
+            name: row.name, grade: row.grade,
+            ...(row.school ? { school: row.school } : {}), ...(row.phone ? { guardianPhone: row.phone } : {}),
+            ...(row.status ? { status: row.status as StudentStatus } : {}),
+            ...(row.totalHours !== undefined || row.consumedHours !== undefined || row.remainingHours !== undefined ? { totalHours, remainingHours } : {}),
+            ...(row.subjects !== undefined ? { subjects: row.subjects as string[] } : {}),
+          }});
+          await tx.studentArchive.upsert({ where: { studentId: existing.id }, create: { studentId: existing.id, learningProfile, familyNotes: row.familyNotes || "" }, update: { learningProfile, ...(row.familyNotes !== undefined ? { familyNotes: row.familyNotes } : {}) } });
+          if (row.subjects !== undefined) {
+            const subjects = row.subjects as string[];
+            const assignments = subjects.map((subject, index) => ({ subject, teacherName: row.teacherNames?.[index] || null, schedule: row.schedules?.[index] || null }));
+            await tx.studentSubjectTeacher.deleteMany({ where: { studentId: existing.id } });
+            if (assignments.length) await tx.studentSubjectTeacher.createMany({ data: assignments.map((item) => ({ studentId: existing.id, ...item })) });
+          }
+          updated++;
+        } else {
+          const subjects = (row.subjects || []) as string[];
+          const assignments = subjects.map((subject, index) => ({ subject, teacherName: row.teacherNames?.[index] || null, schedule: row.schedules?.[index] || null }));
+          await tx.student.create({ data: { name: row.name, grade: row.grade, school: row.school || "", guardianPhone: row.phone || "", subjects, totalHours, remainingHours, status: (row.status || "ACTIVE") as StudentStatus, archive: { create: { learningProfile: { guardianName: row.guardianName || "", gender: row.gender || "", address: row.address || "", weakPoints: row.weakPoints || "" }, familyNotes: row.familyNotes || "" } }, subjectTeachers: { create: assignments } } });
+          created++;
+        }
+      }
+    });
     await this.audit(user, "IMPORT", "Student", undefined, {
       count: rows.length,
     });
-    return { imported: rows.length, errors: [] };
+    return { imported: created + updated, created, updated, errors: [] };
   }
 
   async importTemplate(kind: string) {
     const headers: Record<string, string[]> = {
-      students: ["姓名", "年级", "学校", "家长电话"],
+      students: ["姓名", "性别", "年级", "学校", "学生状态", "家长姓名", "联系电话", "家庭地址", "辅导科目（；分隔）", "科目教师（；分隔）", "科目固定上课时间（；分隔）", "报读总课时", "已消耗课时", "剩余课时", "学生需求", "家长期望"],
       courses: ["课程名称", "科目", "年级", "课时单价"],
       scores: ["学生姓名", "考试名称", "科目", "成绩", "满分", "考试日期"],
       renewals: ["学生姓名", "课时数", "金额", "备注"],

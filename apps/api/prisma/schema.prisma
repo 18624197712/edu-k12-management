@@ -98,6 +98,7 @@ model StudentSubjectTeacher {
   teacherId String?
   teacher Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   teacherName String?
+  schedule String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([studentId, subject])

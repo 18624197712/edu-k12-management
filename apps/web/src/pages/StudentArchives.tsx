@@ -21,7 +21,8 @@ import {
 } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { gradeOptions, subjectOptions, subjectsForGrade } from "@edu/shared";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { ScoreSummary } from "../components/ScoreWorkspace";
 import { Heading, StudentWorkspace, useStudents } from "./domains/shared";
@@ -29,13 +30,30 @@ import type { HourLedger } from "../types";
 
 export function ArchivesPage() {
   const students = useStudents(),
+    [params, setParams] = useSearchParams(),
     [id, setId] = useState<string>(),
     [editing, setEditing] = useState(false),
     [form] = Form.useForm(),
     client = useQueryClient();
-  const student = students.data?.find(
-    (item) => item.id === (id || students.data?.[0]?.id),
-  );
+  const originalHours = useRef({
+    totalHours: 0,
+    consumedHours: 0,
+    remainingHours: 0,
+  });
+  const selectedId = id || params.get("studentId") || students.data?.[0]?.id;
+  const student = students.data?.find((item) => item.id === selectedId);
+  useEffect(() => {
+    if (params.get("edit") === "1" && student && !editing) {
+      openEdit();
+      setParams(
+        (current) => {
+          current.delete("edit");
+          return current;
+        },
+        { replace: true },
+      );
+    }
+  }, [student?.id, params, editing]);
   const ledgers = useQuery({
     queryKey: ["hour-ledgers", student?.id],
     queryFn: async () =>
@@ -53,15 +71,18 @@ export function ArchivesPage() {
         phone: values.phone,
         status: values.status,
         subjects: values.subjects || [],
+        totalHours: values.totalHours,
+        consumedHours: values.consumedHours,
+        remainingHours: values.remainingHours,
         subjectTeachers: (values.subjects || []).map((subject: string) => ({
           subject,
           teacherName: values.teacherBySubject?.[subject]?.trim() || null,
+          schedule: values.scheduleBySubject?.[subject]?.trim() || null,
         })),
         profile: {
           guardianName: values.guardianName,
           gender: values.gender,
           address: values.address,
-          schedule: values.schedule,
           weakPoints: values.weakPoints,
           headTeacherName: values.headTeacherName,
         },
@@ -82,8 +103,54 @@ export function ArchivesPage() {
       teacherBySubject: Object.fromEntries(
         student.subjectTeachers.map((item) => [item.subject, item.teacherName]),
       ),
+      scheduleBySubject: Object.fromEntries(
+        student.subjectTeachers.map((item) => [
+          item.subject,
+          item.schedule || "",
+        ]),
+      ),
+      consumedHours: student.consumedHours,
     });
+    originalHours.current = {
+      totalHours: student.totalHours,
+      consumedHours:
+        student.consumedHours ?? student.totalHours - student.remainingHours,
+      remainingHours: student.remainingHours,
+    };
     setEditing(true);
+  };
+  const handleSave = (values: any) => {
+    const original = originalHours.current;
+    const next = { ...values };
+    const totalChanged = Number(values.totalHours) !== original.totalHours;
+    const consumedChanged =
+      Number(values.consumedHours) !== original.consumedHours;
+    const remainingChanged =
+      Number(values.remainingHours) !== original.remainingHours;
+    if (consumedChanged && !remainingChanged)
+      next.remainingHours =
+        Number(values.totalHours) - Number(values.consumedHours);
+    else if (remainingChanged && !consumedChanged)
+      next.consumedHours =
+        Number(values.totalHours) - Number(values.remainingHours);
+    else if (totalChanged && !consumedChanged && !remainingChanged)
+      next.remainingHours = Number(values.totalHours) - original.consumedHours;
+    if (
+      Number(next.totalHours) < 0 ||
+      Number(next.consumedHours) < 0 ||
+      Number(next.remainingHours) < 0
+    ) {
+      message.error("课时不能为负数，且剩余课时不能超过报读总课时");
+      return;
+    }
+    if (
+      Number(next.totalHours) !==
+      Number(next.consumedHours) + Number(next.remainingHours)
+    ) {
+      message.error("报读总课时必须等于已消耗课时与剩余课时之和");
+      return;
+    }
+    save.mutate(next);
   };
   return (
     <>
@@ -207,8 +274,12 @@ export function ArchivesPage() {
                       },
                       {
                         key: "schedule",
-                        label: "上课时间",
-                        children: student.schedule,
+                        label: "固定上课时间",
+                        children:
+                          student.subjectTeachers
+                            .filter((item) => item.schedule)
+                            .map((item) => `${item.subject} ${item.schedule}`)
+                            .join("；") || "暂未设置",
                       },
                     ]}
                   />
@@ -222,7 +293,8 @@ export function ArchivesPage() {
                     </div>
                     <div>
                       <strong>
-                        {student.totalHours - student.remainingHours}
+                        {student.consumedHours ??
+                          student.totalHours - student.remainingHours}
                       </strong>
                       <span>已消耗课时</span>
                     </div>
@@ -233,7 +305,8 @@ export function ArchivesPage() {
                   </div>
                   <Progress
                     percent={Math.round(
-                      ((student.totalHours - student.remainingHours) /
+                      ((student.consumedHours ??
+                        student.totalHours - student.remainingHours) /
                         Math.max(student.totalHours, 1)) *
                         100,
                     )}
@@ -268,9 +341,11 @@ export function ArchivesPage() {
                             ? "首次报读"
                             : value === "RENEWAL_ADD"
                               ? "续费增加"
-                              : value === "LESSON_REFUND"
-                                ? "课时退回"
-                                : "上课扣减",
+                              : value === "MANUAL_ADJUSTMENT"
+                                ? "人工调整"
+                                : value === "LESSON_REFUND"
+                                  ? "课时退回"
+                                  : "上课扣减",
                       },
                       {
                         title: "变动",
@@ -330,11 +405,7 @@ export function ArchivesPage() {
         onOk={() => form.submit()}
         confirmLoading={save.isPending}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={(values) => save.mutate(values)}
-        >
+        <Form form={form} layout="vertical" onFinish={handleSave}>
           <div className="form-row">
             <Form.Item
               name="name"
@@ -371,14 +442,9 @@ export function ArchivesPage() {
               <Input />
             </Form.Item>
           </div>
-          <div className="form-row">
-            <Form.Item name="address" label="家庭住址">
-              <Input />
-            </Form.Item>
-            <Form.Item name="schedule" label="上课时间">
-              <Input />
-            </Form.Item>
-          </div>
+          <Form.Item name="address" label="家庭住址">
+            <Input />
+          </Form.Item>
           <div className="form-row">
             <Form.Item name="status" label="学生状态">
               <Select
@@ -419,24 +485,36 @@ export function ArchivesPage() {
             />
           </Form.Item>
           {selectedSubjects.map((subject: string) => (
-            <Form.Item
-              key={subject}
-              name={["teacherBySubject", subject]}
-              label={`${subject}授课教师`}
-            >
-              <Input allowClear placeholder="由业务人员填写教师姓名" />
-            </Form.Item>
+            <div className="form-row subject-schedule-row" key={subject}>
+              <Form.Item
+                name={["teacherBySubject", subject]}
+                label={`${subject}授课教师`}
+              >
+                <Input allowClear placeholder="由业务人员填写教师姓名" />
+              </Form.Item>
+              <Form.Item
+                name={["scheduleBySubject", subject]}
+                label={`${subject}固定上课时间`}
+              >
+                <Input allowClear placeholder="如：周六 09:00-11:00" />
+              </Form.Item>
+            </div>
           ))}
           <div className="form-row">
             <Form.Item name="totalHours" label="报读总课时">
-              <InputNumber disabled style={{ width: "100%" }} />
+              <InputNumber min={0} step={0.5} style={{ width: "100%" }} />
             </Form.Item>
+            <Form.Item name="consumedHours" label="已消耗课时">
+              <InputNumber min={0} step={0.5} style={{ width: "100%" }} />
+            </Form.Item>
+          </div>
+          <div className="form-row">
             <Form.Item name="remainingHours" label="剩余课时">
-              <InputNumber disabled style={{ width: "100%" }} />
+              <InputNumber min={0} step={0.5} style={{ width: "100%" }} />
             </Form.Item>
           </div>
           <Typography.Paragraph type="secondary">
-            课时由课程完成和报名续费入账自动变更，不能在档案中直接修改。
+            课时修改会记录人工调整流水；后续课程标记为“已结束”时仍会自动扣减剩余课时。
           </Typography.Paragraph>
           <Form.Item name="weakPoints" label="学生需求">
             <Input.TextArea rows={3} />

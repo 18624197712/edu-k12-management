@@ -34,6 +34,7 @@ type StudentForm = {
   school?: string;
   subjects?: string[];
   teacherBySubject?: Record<string, string>;
+  scheduleBySubject?: Record<string, string>;
   guardianName?: string;
   phone?: string;
   totalHours: number;
@@ -89,6 +90,7 @@ export function Students() {
           subjectTeachers: subjects.map((item) => ({
             subject: item,
             teacherName: values.teacherBySubject?.[item]?.trim() || null,
+            schedule: values.scheduleBySubject?.[item]?.trim() || null,
           })),
           remainingHours: values.totalHours,
           profile: {
@@ -176,7 +178,7 @@ export function Students() {
         </Space>
       ),
     },
-    {
+  {
       title: "授课老师",
       dataIndex: "teachers",
       width: 130,
@@ -217,7 +219,22 @@ export function Students() {
         </div>
       ),
     },
-    { title: "上课时间", dataIndex: "schedule", width: 150 },
+    {
+      title: "上课时间",
+      dataIndex: "schedule",
+      width: 190,
+      render: (_: string, row: Student) => {
+        const items = (row.subjectTeachers || []).filter((item) => item.schedule);
+        if (!items.length) return <span className="muted-text">未设置</span>;
+        const visible = items.slice(0, 2);
+        return (
+          <div className="compact-schedules" title={items.map((item) => `${item.subject} ${item.schedule}`).join("\n")}>
+            {visible.map((item) => <span key={item.subject}><b>{item.subject}</b> {item.schedule}</span>)}
+            {items.length > visible.length && <em>+{items.length - visible.length} 个</em>}
+          </div>
+        );
+      },
+    },
     {
       title: "状态",
       dataIndex: "status",
@@ -244,6 +261,9 @@ export function Students() {
         <Space size={0} className="student-actions" wrap={false}>
           <Button type="link" onClick={() => navigate(`/students/${row.id}`)}>
             详情
+          </Button>
+          <Button type="link" onClick={() => navigate(`/archives?studentId=${row.id}&edit=1`)}>
+            编辑
           </Button>
           <Button
             type="link"
@@ -431,13 +451,14 @@ export function Students() {
                 <span>由业务人员直接填写，可为不同科目填写不同教师</span>
               </div>
               {selectedSubjects.map((item: string) => (
-                <Form.Item
-                  key={item}
-                  name={["teacherBySubject", item]}
-                  label={`${item}授课教师`}
-                >
-                  <Input allowClear placeholder="请输入教师姓名" />
-                </Form.Item>
+                <div className="form-row subject-schedule-row" key={item}>
+                  <Form.Item name={["teacherBySubject", item]} label={`${item}授课教师`}>
+                    <Input allowClear placeholder="请输入教师姓名" />
+                  </Form.Item>
+                  <Form.Item name={["scheduleBySubject", item]} label={`${item}固定上课时间`}>
+                    <Input allowClear placeholder="如：周六 09:00-11:00" />
+                  </Form.Item>
+                </div>
               ))}
             </div>
           )}
@@ -456,9 +477,6 @@ export function Students() {
               rules={[{ required: true }]}
             >
               <InputNumber min={1} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item label="固定上课时间" name="schedule">
-              <Input placeholder="周六 09:00-11:00" />
             </Form.Item>
           </div>
           <Form.Item label="薄弱知识点" name="weakPoints">
