@@ -257,10 +257,14 @@ export function Students() {
     {
       title: "操作",
       fixed: "right" as const,
-      width: 250,
+      width: 286,
       render: (_: unknown, row: Student) => (
-        <Space size={0} className="student-actions" wrap={false}>
-          <Button type="link" onClick={() => navigate(`/students/${row.id}`)}>
+        <Space size={4} className="student-actions" wrap={false}>
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => navigate(`/students/${row.id}`)}
+          >
             详情
           </Button>
           <Button
@@ -269,10 +273,11 @@ export function Students() {
             icon={<EditOutlined />}
             onClick={() => navigate(`/archives?studentId=${row.id}&edit=1`)}
           >
-            编辑资料
+            编辑
           </Button>
           <Button
-            type="link"
+            type="primary"
+            size="small"
             onClick={() => navigate(`/students/${row.id}?tab=communication`)}
           >
             跟进
@@ -288,7 +293,7 @@ export function Students() {
             cancelText="取消"
             onConfirm={() => remove.mutate(row.id)}
           >
-            <Button danger type="link" icon={<DeleteOutlined />} className="student-delete-button">
+            <Button danger type="primary" size="small" icon={<DeleteOutlined />} className="student-delete-button">
               {row.status === "GRADUATED" ? "删档" : "删除"}
             </Button>
           </Popconfirm>
@@ -322,6 +327,7 @@ export function Students() {
               type="primary"
               size="small"
               icon={<PlusOutlined />}
+              className="student-add-button"
               onClick={() => setOpen(true)}
             >
               新增学生
