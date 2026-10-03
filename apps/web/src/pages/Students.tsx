@@ -1,8 +1,5 @@
 import {
-  DeleteOutlined,
   DownloadOutlined,
-  EditOutlined,
-  PlusOutlined,
   SearchOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
@@ -270,7 +267,6 @@ export function Students() {
           <Button
             type="primary"
             size="small"
-            icon={<EditOutlined />}
             onClick={() => navigate(`/archives?studentId=${row.id}&edit=1`)}
           >
             编辑
@@ -293,7 +289,7 @@ export function Students() {
             cancelText="取消"
             onConfirm={() => remove.mutate(row.id)}
           >
-            <Button danger type="primary" size="small" icon={<DeleteOutlined />} className="student-delete-button">
+            <Button danger type="primary" size="small" className="student-delete-button">
               {row.status === "GRADUATED" ? "删档" : "删除"}
             </Button>
           </Popconfirm>
@@ -318,7 +314,6 @@ export function Students() {
           <Space wrap>
             <Button
               size="small"
-              icon={<UploadOutlined />}
               onClick={() => setImportOpen(true)}
             >
               Excel 导入
@@ -326,8 +321,8 @@ export function Students() {
             <Button
               type="primary"
               size="small"
-              icon={<PlusOutlined />}
               className="student-add-button"
+              style={{ color: "#fff", fontWeight: 600 }}
               onClick={() => setOpen(true)}
             >
               新增学生
