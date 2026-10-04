@@ -10,6 +10,7 @@ import {
   DataService,
   lessonAccountingChange,
   lessonHours,
+  parseFixedSchedule,
 } from "./data.service";
 
 describe("DataService business rules", () => {
@@ -117,6 +118,16 @@ describe("DataService business rules", () => {
   it("converts lesson duration to billable hours unless an explicit value is provided", () => {
     expect(lessonHours(90)).toBe(1.5);
     expect(lessonHours(120, 1)).toBe(1);
+  });
+
+  it("parses fixed archive schedules for future lesson synchronization", () => {
+    expect(parseFixedSchedule("周六 09:00-11:00")).toEqual({
+      weekday: 6,
+      hour: 9,
+      minute: 0,
+      durationMinutes: 120,
+    });
+    expect(parseFixedSchedule("未设置")).toBeNull();
   });
 
   it("only applies the accounting difference when lesson completion changes", () => {

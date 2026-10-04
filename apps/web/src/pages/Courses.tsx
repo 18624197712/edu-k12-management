@@ -189,6 +189,7 @@ export function CoursesPage() {
       status: row.status,
       note: row.note,
       scope: "SINGLE",
+      syncSchedule: false,
     });
   };
   const openFeedback = (row: any) => {
@@ -569,6 +570,12 @@ export function CoursesPage() {
             rules={[{ required: true }]}
           >
             <DatePicker showTime style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="syncSchedule"
+            valuePropName="checked"
+          >
+            <Checkbox>将本次调整后的时间同步为该科目固定上课时间</Checkbox>
           </Form.Item>
           <div className="form-row">
             <Form.Item name="durationMinutes" label="时长（分钟）">

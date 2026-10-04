@@ -5,6 +5,7 @@ import {
 } from "@ant-design/icons";
 import {
   Button,
+  Checkbox,
   Descriptions,
   Empty,
   Form,
@@ -79,6 +80,7 @@ export function ArchivesPage() {
           teacherName: values.teacherBySubject?.[subject]?.trim() || null,
           schedule: values.scheduleBySubject?.[subject]?.trim() || null,
         })),
+        syncScheduleToLessons: values.syncScheduleToLessons === true,
         profile: {
           guardianName: values.guardianName,
           gender: values.gender,
@@ -110,6 +112,7 @@ export function ArchivesPage() {
         ]),
       ),
       consumedHours: student.consumedHours,
+      syncScheduleToLessons: false,
     });
     originalHours.current = {
       totalHours: student.totalHours,
@@ -500,6 +503,14 @@ export function ArchivesPage() {
               </Form.Item>
             </div>
           ))}
+          <Form.Item
+            name="syncScheduleToLessons"
+            valuePropName="checked"
+          >
+            <Checkbox>
+              将修改后的固定时间同步到未来课程（仅待上课/进行中）
+            </Checkbox>
+          </Form.Item>
           <div className="form-row">
             <Form.Item name="totalHours" label="报读总课时">
               <InputNumber min={0} step={0.5} style={{ width: "100%" }} />

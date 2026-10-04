@@ -28,6 +28,54 @@ import { PrismaService } from "./prisma.service";
 
 type JsonMap = Record<string, any>;
 const number = (value: unknown) => Number(value || 0);
+
+/** Parse the compact schedule text used in student archives. */
+export function parseFixedSchedule(value: unknown) {
+  const match = String(value || "").match(
+    /周([一二三四五六日天])\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/,
+  );
+  if (!match) return null;
+  const weekdays: Record<string, number> = {
+    日: 0,
+    天: 0,
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+  };
+  const startHour = Number(match[2]);
+  const startMinute = Number(match[3]);
+  const endHour = Number(match[4]);
+  const endMinute = Number(match[5]);
+  const durationMinutes =
+    (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+  if (
+    !Number.isInteger(weekdays[match[1]]) ||
+    startHour > 23 ||
+    endHour > 23 ||
+    startMinute > 59 ||
+    endMinute > 59 ||
+    durationMinutes <= 0
+  )
+    return null;
+  return {
+    weekday: weekdays[match[1]],
+    hour: startHour,
+    minute: startMinute,
+    durationMinutes,
+  };
+}
+
+function nextScheduleDate(now: Date, weekday: number, hour: number, minute: number) {
+  const result = new Date(now);
+  result.setHours(hour, minute, 0, 0);
+  const days = (weekday - result.getDay() + 7) % 7;
+  if (days === 0 && result <= now) result.setDate(result.getDate() + 7);
+  else result.setDate(result.getDate() + days);
+  return result;
+}
 export function buildWeeklyLessonDates(
   startsAt: Date,
   repeatUntil: Date,
@@ -494,6 +542,41 @@ export class DataService {
               schedule: String(assignmentBySubject.get(subject)?.schedule || "").trim() || null,
             })),
           });
+      }
+      if (data.syncScheduleToLessons === true && Array.isArray(data.subjectTeachers)) {
+        const now = new Date();
+        for (const assignment of data.subjectTeachers as JsonMap[]) {
+          const subject = String(assignment.subject || "").trim();
+          const parsed = parseFixedSchedule(assignment.schedule);
+          if (!subject || !parsed) continue;
+          const futureLessons = await tx.lesson.findMany({
+            where: {
+              studentId: id,
+              startsAt: { gte: now },
+              status: { in: [WorkflowStatus.PENDING, WorkflowStatus.IN_PROGRESS] },
+              course: { subject },
+            },
+            orderBy: { startsAt: "asc" },
+          });
+          let nextStart = nextScheduleDate(
+            now,
+            parsed.weekday,
+            parsed.hour,
+            parsed.minute,
+          );
+          for (const lesson of futureLessons) {
+            await tx.lesson.update({
+              where: { id: lesson.id },
+              data: {
+                startsAt: nextStart,
+                durationMinutes: parsed.durationMinutes,
+                consumedHours: lessonHours(parsed.durationMinutes),
+              },
+            });
+            nextStart = new Date(nextStart);
+            nextStart.setDate(nextStart.getDate() + 7);
+          }
+        }
       }
       if (
         hasHourEdit &&
@@ -980,6 +1063,29 @@ export class DataService {
         const account = await tx.student.findUniqueOrThrow({
           where: { id: current.studentId },
         });
+        if (data.syncSchedule && current.course.subject) {
+          const scheduleStart = nextStart || current.startsAt;
+          const scheduleDuration =
+            data.durationMinutes !== undefined
+              ? Number(data.durationMinutes)
+              : current.durationMinutes;
+          const weekday = ["日", "一", "二", "三", "四", "五", "六"][
+            scheduleStart.getDay()
+          ];
+          const endAt = new Date(
+            scheduleStart.getTime() + scheduleDuration * 60000,
+          );
+          const pad = (value: number) => String(value).padStart(2, "0");
+          await tx.studentSubjectTeacher.updateMany({
+            where: {
+              studentId: current.studentId,
+              subject: current.course.subject,
+            },
+            data: {
+              schedule: `周${weekday} ${pad(scheduleStart.getHours())}:${pad(scheduleStart.getMinutes())}-${pad(endAt.getHours())}:${pad(endAt.getMinutes())}`,
+            },
+          });
+        }
         const changes = targets.map((row) => {
           const durationMinutes = data.durationMinutes ?? row.durationMinutes;
           const consumedHours =
